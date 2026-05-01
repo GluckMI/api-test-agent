@@ -1,0 +1,136 @@
+# ============================================================
+# API Test Agent v2.0 - 多环境切换演示
+# ============================================================
+# 
+# 本示例展示多环境切换的完整工作流：
+# 1. 同一套测试用例可以在不同环境下运行
+# 2. 通过 --env 参数一键切换环境
+# 3. 通过 --var 参数临时覆盖特定配置
+# 4. 从 environments.yaml 的 variables 中读取自定义变量
+#
+# 运行方法：
+#   # 在 dev 环境运行
+#   python api_test_agent.py run examples/v2_environment/multi_env_demo.yaml --env dev
+#
+#   # 在 staging 环境运行
+#   python api_test_agent.py run examples/v2_environment/multi_env_demo.yaml --env staging
+#
+#   # 临时覆盖 timeout 为 60 秒
+#   python api_test_agent.py run examples/v2_environment/multi_env_demo.yaml --env dev --var timeout=60
+#
+#   # 临时覆盖 headers.Authorization
+#   python api_test_agent.py run examples/v2_environment/multi_env_demo.yaml --env dev --var headers.Authorization=Bearer%20test_token
+# ============================================================
+
+- name: "多环境兼容性测试 - 用户认证流程"
+  description: |
+    这套测试用例设计为环境无关，可在任意环境下运行
+    所有 URL 和配置都从环境配置中动态读取
+    
+    适用场景：
+    - 冒烟测试：验证各环境核心功能可用性
+    - 回归测试：确保代码更新后功能正常
+    - 配置验证：确认环境配置正确性
+
+  steps:
+    # 步骤 1：用户登录
+    - name: "用户登录"
+      method: POST
+      endpoint: "${base_url}/auth/login"
+      
+      json:
+        username: "${TEST_ADMIN_USERNAME}"
+        password: "${TEST_ADMIN_PASSWORD}"
+      
+      headers:
+        Content-Type: "application/json"
+      
+      extract:
+        token: "data.token"
+        user_id: "data.user.id"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+          name: "登录成功"
+        
+        - type: contains_key
+          key: "token"
+          name: "返回认证令牌"
+
+    # 步骤 2：使用 Token 访问受保护资源
+    - name: "获取用户个人信息"
+      method: GET
+      endpoint: "${base_url}/users/${user_id}"
+      
+      headers:
+        Authorization: "Bearer ${token}"
+        X-Custom-Header: "${X_Environment}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: equal
+          path: "id"
+          expected_from_extract: "user_id"
+          name: "用户 ID 匹配"
+
+    # 步骤 3：访问需要特定权限的资源
+    - name: "访问管理员面板"
+      method: GET
+      endpoint: "${base_url}/admin/dashboard"
+      
+      headers:
+        Authorization: "Bearer ${token}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+          name: "管理员权限验证通过"
+
+- name: "环境特定行为测试"
+  description: |
+    测试不同环境下的差异化行为
+    例如：debug_mode 在 dev 环境为 true，在其他环境为 false
+
+  steps:
+    - name: "检查调试模式状态"
+      method: GET
+      endpoint: "${base_url}/system/debug-info"
+      
+      headers:
+        X-Debug: "${debug_mode}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        # 根据 debug_mode 动态调整预期值
+        - type: equal
+          path: "debug_enabled"
+          # 注意：这里使用字符串形式，实际会从环境变量替换
+          expected: "${debug_mode}"
+          name: "调试模式状态正确"
+
+- name: "命令行覆盖参数演示"
+  description: |
+    演示 --var 参数如何临时覆盖配置
+    运行时可通过 --var timeout=60 覆盖默认超时时间
+    
+    示例命令：
+    python api_test_agent.py run this_file.yaml --env dev --var custom_var=test_value
+
+  steps:
+    - name: "使用覆盖后的配置"
+      method: GET
+      endpoint: "${base_url}/health"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+          name: "健康检查通过"
+        
+        - type: response_time
+          max: "${timeout}"  # 会从 --var timeout=60 中读取
+          name: "响应时间在超时范围内"

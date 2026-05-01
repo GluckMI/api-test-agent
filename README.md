@@ -3,12 +3,53 @@
 [![Python Version](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-2.0-alpha-orange.svg)]()
 
 一个让 **API 测试像写便签一样简单** 的 Python 框架
 
 ---
 
-## ✨ 特性
+## ✨ v2.0 新功能亮点 🎉
+
+> **2026-05-01 发布 v2.0-alpha 版本，带来四大核心能力升级！**
+
+### 🔥 核心新特性
+
+| 特性 | 说明 | 状态 |
+|------|------|------|
+| **🌍 环境管理** | 多环境配置（dev/staging/prod），一键切换 | ✅ 已完成 |
+| **🪝 钩子系统** | 完整生命周期（setup/teardown），支持 HTTP/Command/Script | ✅ 已完成 |
+| **📊 数据驱动** | CSV/JSON 参数化测试，自动生成用例 | ✅ 已完成 |
+| **⚡ 并发执行** | 多线程并发，显著提升测试效率 | ✅ 已完成 |
+
+### 快速体验 v2.0
+
+```bash
+# 1. 使用环境配置运行测试
+python api_test_agent.py run tests/ --env staging
+
+# 2. 使用数据驱动测试（CSV/JSON）
+python api_test_agent.py run examples/v2_data_driven/csv_example.yaml --env dev
+
+# 3. 并发执行（4 个工作线程）
+python api_test_agent.py run tests/ -w 4
+
+# 4. 查看当前环境配置
+python api_test_agent.py env show staging
+```
+
+### v2.0 完整文档
+
+- [v2.0 迁移指南](MIGRATION_GUIDE.md) - 从 v1.0 升级的完整指南
+- [环境管理示例](examples/v2_environment/) - 多环境配置最佳实践
+- [钩子机制示例](examples/v2_hooks/) - 生命周期和钩子使用教程
+- [数据驱动示例](examples/v2_data_driven/) - CSV/JSON 参数化测试演示
+
+---
+
+## ✨ 特性（v1.0 + v2.0）
+
+### 基础特性（v1.0）
 
 - ✅ **声明式配置** - YAML 编写，10 分钟上手
 - ✅ **强大断言** - 10 种内置断言类型
@@ -16,6 +57,13 @@
 - ✅ **多格式报告** - HTML/Markdown/JSON自动生成
 - ✅ **双模式运行** - CLI + Python API
 - ✅ **CI/CD 集成** - 原生支持自动化流水线
+
+### v2.0 增强特性
+
+- ✅ **多环境管理** - dev/staging/prod 一键切换，支持 .env 文件
+- ✅ **钩子生命周期** - global_setup → setup → steps → teardown → global_teardown
+- ✅ **数据驱动测试** - CSV/JSON 外部数据源，模板参数化
+- ✅ **并发执行引擎** - 多线程并行，加速比可达 3-5x
 
 ---
 
@@ -62,7 +110,17 @@ steps:
 ### 运行测试
 
 ```bash
+# 基础运行（v1.0 方式）
 python api_test_agent.py run tests/my_first_test.yaml --reports html
+
+# v2.0: 使用环境配置运行
+python api_test_agent.py run tests/my_first_test.yaml --env dev
+
+# v2.0: 查看当前生效的配置
+python api_test_agent.py run tests/my_first_test.yaml --env dev --show-config
+
+# v2.0: 并发执行（4 个工作线程）
+python api_test_agent.py run tests/ --env staging -w 4
 ```
 
 ### 查看报告
@@ -141,6 +199,25 @@ python api_test_agent.py run tests/ --base-url https://api.example.com
 
 # 查看详细日志
 python api_test_agent.py run tests/ --verbose --timeout 60
+
+# ===== v2.0 新增参数 =====
+
+# 使用环境配置（dev/staging/prod）
+python api_test_agent.py run tests/ --env staging
+
+# 覆盖特定配置项（可多次使用）
+python api_test_agent.py run tests/ --env dev --var timeout=60 --var headers.Authorization=Bearer%20xxx
+
+# 并发执行（指定工作线程数）
+python api_test_agent.py run tests/ -w 4
+
+# 显示当前生效的配置（脱敏显示敏感信息）
+python api_test_agent.py run tests/ --env prod --show-config
+
+# 环境管理子命令
+python api_test_agent.py env list              # 列出所有可用环境
+python api_test_agent.py env validate staging   # 验证环境配置
+python api_test_agent.py env show dev           # 显示环境配置详情
 ```
 
 ---

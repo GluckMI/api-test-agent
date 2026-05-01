@@ -1,0 +1,165 @@
+# ============================================================
+# API Test Agent v2.0 - JSON 数据驱动测试示例
+# ============================================================
+#
+# 本示例展示如何使用 JSON 文件作为数据源进行参数化测试
+# JSON 格式支持更复杂的数据结构（嵌套对象、数组等）
+#
+# 数据文件：test_data/register_cases.json
+# 包含 6 组注册测试数据（包括嵌套的 profile 对象）
+#
+# 运行方法：
+#   python api_test_agent.py run examples/v2_data_driven/json_example.yaml --env dev
+#
+# 特性演示：
+# ✅ JSON 嵌套结构支持
+# ✅ 动态用例命名（case_name_template）
+# ✅ 复杂数据类型传递
+# ✅ 条件断言（根据 expected_status 动态调整）
+# ============================================================
+
+data_source:
+  # 数据源类型：json（也支持 yaml）
+  type: json
+  
+  # 数据文件路径
+  file: test_data/register_cases.json
+  
+  # 用例名称模板：使用数据字段动态生成名称
+  case_name_template: "注册测试_{data.test_name}"
+
+template:
+  name: "JSON 数据驱动注册测试"
+  
+  description: |
+    从 register_cases.json 加载测试数据
+    支持 JSON 嵌套结构（如 profile 对象）
+    演示复杂数据类型的参数化测试
+
+  steps:
+    # 步骤 1：执行注册请求
+    - name: "提交注册表单"
+      method: POST
+      endpoint: "${base_url}/auth/register"
+      
+      headers:
+        Content-Type: "application/json"
+      
+      # 直接传递 JSON 数据（支持嵌套结构）
+      json:
+        username: "${data.username}"
+        email: "${data.email}"
+        password: "${data.password}"
+        role: "${data.role}"
+        profile:
+          nickname: "${data.profile.nickname}"
+          avatar: "${data.profile.avatar}"
+          bio: "${data.profile.bio}"
+      
+      extract:
+        new_user_id: "data.user.id"
+        registration_token: "data.token"
+        
+      assertions:
+        - type: status_code
+          expected: "${data.expected_status}"
+          name: "HTTP 状态码检查"
+        
+        - type: response_time
+          max: 10.0
+          name: "响应时间检查"
+
+    # 步骤 2：验证注册结果（仅成功注册时执行）
+    - name: "验证新用户信息"
+      method: GET
+      endpoint: "${base_url}/users/${new_user_id}"
+      
+      condition: "${data.expected_status} == '201'"
+      
+      headers:
+        Authorization: "Bearer ${registration_token}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: equal
+          path: "username"
+          expected: "${data.username}"
+          name: "用户名匹配"
+        
+        - type: equal
+          path: "email"
+          expected: "${data.email}"
+          name: "邮箱匹配"
+        
+        - type: equal
+          path: "role"
+          expected: "${data.role}"
+          name: "角色匹配"
+        
+        - type: contains_key
+          key: "profile"
+          name: "包含 profile 信息"
+
+    # 步骤 3：验证嵌套的 profile 字段
+    - name: "验证 Profile 详细信息"
+      method: GET
+      endpoint: "${base_url}/users/${new_user_id}/profile"
+      
+      condition: "${data.expected_status} == '201'"
+      
+      headers:
+        Authorization: "Bearer ${registration_token}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: equal
+          path: "nickname"
+          expected: "${data.profile.nickname}"
+          name: "昵称匹配"
+        
+        - type: equal
+          path: "avatar"
+          expected: "${data.profile.avatar}"
+          name: "头像匹配"
+
+  setup:
+    # 前置：检查用户是否已存在（用于重复注册测试）
+    - name: "检查用户是否存在"
+      type: http
+      method: GET
+      endpoint: "${base_url}/users/check"
+      
+      params:
+        username: "${data.username}"
+        email: "${data.email}"
+      
+      extract:
+        user_exists: "data.exists"
+      
+      ignore_failure: true
+
+  teardown:
+    # 后置：清理新注册的用户（保持环境干净）
+    - name: "删除测试用户"
+      type: http
+      method: DELETE
+      endpoint: "${base_url}/users/${new_user_id}"
+      
+      condition: "${data.expected_status} == '201' and ${new_user_id} is not none"
+      
+      headers:
+        Authorization: "Bearer ${registration_token}"
+        X-Cleanup-Reason: "automated_test"
+      
+      ignore_failure: true
+    
+    - name: "记录测试日志"
+      type: command
+      command: |
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Registration test completed: ${data.test_name} (status=${data.expected_status})" >> test_registration.log
+      
+      ignore_failure: true

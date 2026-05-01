@@ -48,10 +48,21 @@ reports/*.md
 # Config files with secrets
 config.json
 .env
+configs/.env
+configs/.env.*
+!configs/.env.example
+!configs/.env.staging.example
 
 # Test data (optional sensitive data)
 tests/data/*.csv
 tests/data/*.xlsx
+
+# Generated test artifacts
+test_data/*.log
+data_driven_test.log
+hooks_demo.log
+test_registration.log
+test_hooks.log
 
 # Coverage
 .coverage

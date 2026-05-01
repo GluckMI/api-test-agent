@@ -1,0 +1,247 @@
+# ============================================================
+# API Test Agent v2.0 - 钩子完整生命周期演示
+# ============================================================
+#
+# 本示例展示钩子系统的完整生命周期：
+# global_setup → setup → steps → teardown → global_teardown
+#
+# 支持的钩子类型：
+# - http: HTTP 请求钩子（最常用）
+# - command: 系统命令钩子
+# - script: Python 脚本钩子
+#
+# 核心特性：
+# ✅ 变量提取与跨步骤传递
+# ✅ 条件执行（condition）
+# ✅ 失败忽略（ignore_failure）
+# ✅ 多种钩子类型组合使用
+#
+# 运行方法：
+#   python api_test_agent.py run examples/v2_hooks/full_lifecycle.yaml --env dev
+# ============================================================
+
+global_setup:
+  # 全局前置钩子：在所有测试用例执行前运行一次
+  # 典型用途：初始化数据库、启动服务、生成测试数据
+  
+  # 钩子 1：通过 HTTP 创建测试用户
+  - name: "全局初始化：创建测试管理员账号"
+    type: http
+    method: POST
+    endpoint: "${base_url}/auth/register"
+    
+    headers:
+      Content-Type: "application/json"
+    
+    json:
+      username: "test_admin_hook"
+      email: "admin_hook@test.com"
+      password: "Admin123456"
+      role: "admin"
+    
+    extract:
+      admin_user_id: "data.user.id"
+      admin_token: "data.token"
+    
+    ignore_failure: false  # 如果失败，停止后续执行
+
+  # 钩子 2：通过 Command 执行数据库初始化脚本
+  - name: "全局初始化：执行数据库迁移"
+    type: command
+    command: "python scripts/db_migrate.py --env ${current_environment}"
+    
+    timeout: 30
+    
+    ignore_failure: true  # 数据库迁移失败不阻塞测试
+
+  # 钩子 3：通过 Script 执行自定义 Python 初始化逻辑
+  - name: "全局初始化：加载测试 fixtures"
+    type: script
+    script: "examples/v2_hooks/hooks/scripts/sample_setup.py"
+    
+    extract:
+      fixture_data_loaded: "fixture_status"
+
+global_teardown:
+  # 全局后置钩子：在所有测试用例执行后运行一次
+  # 典型用途：清理测试数据、关闭连接、生成报告
+  
+  - name: "全局清理：删除测试数据"
+    type: http
+    method: DELETE
+    endpoint: "${base_url}/users/${admin_user_id}"
+    
+    headers:
+      Authorization: "Bearer ${admin_token}"
+    
+    condition: "${admin_user_id} is not none"  # 仅当 admin_user_id 存在时执行
+    
+    ignore_failure: true  # 清理失败不影响测试结果
+
+- name: "测试用例 1：带完整生命周期钩子的 API 测试"
+  description: |
+    演示完整的钩子生命周期：
+    1. global_setup 先执行（创建管理员）
+    2. case setup 执行（准备用例特定数据）
+    3. steps 执行（实际测试步骤）
+    4. case teardown 执行（清理用例数据）
+    5. global_teardown 最后执行（全局清理）
+
+  setup:
+    # 用例级前置钩子：为当前用例准备数据
+    
+    - name: "用例 Setup：创建测试文章"
+      type: http
+      method: POST
+      endpoint: "${base_url}/posts"
+      
+      headers:
+        Authorization: "Bearer ${admin_token}"
+        Content-Type: "application/json"
+      
+      json:
+        title: "钩子测试文章 - ${timestamp}"
+        content: "这是一篇用于测试钩子机制的文章"
+        author_id: "${admin_user_id}"
+      
+      extract:
+        post_id: "data.post.id"
+        
+      ignore_failure: false
+
+    - name: "用例 Setup：条件性初始化（仅 debug 模式）"
+      type: http
+      method: POST
+      endpoint: "${base_url}/debug/enable-logging"
+      
+      headers:
+        Authorization: "Bearer ${admin_token}"
+      
+      condition: "${debug_mode} == 'True'"  # 仅在 debug 模式下执行
+      
+      ignore_failure: true
+
+  steps:
+    # 实际测试步骤
+    
+    - name: "获取刚创建的文章"
+      method: GET
+      endpoint: "${base_url}/posts/${post_id}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: equal
+          path: "id"
+          expected_from_extract: "post_id"
+          name: "文章 ID 匹配"
+        
+        - type: contains_key
+          key: "title"
+          name: "包含标题字段"
+
+    - name: "更新文章内容"
+      method: PUT
+      endpoint: "${base_url}/posts/${post_id}"
+      
+      headers:
+        Authorization: "Bearer ${admin_token}"
+        Content-Type: "application/json"
+      
+      json:
+        title: "已更新的文章标题"
+        content: "内容已通过钩子测试更新"
+      
+      extract:
+        updated_title: "data.title"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: equal
+          path: "title"
+          expected: "已更新的文章标题"
+          name: "标题已更新"
+
+    - name: "验证跨钩子的变量传递"
+      method: GET
+      endpoint: "${base_url}/users/${admin_user_id}"
+      
+      headers:
+        Authorization: "Bearer ${admin_token}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+          
+        # 验证从 global_setup 提取的变量仍然可用
+        - type: equal
+          path: "id"
+          expected_from_extract: "admin_user_id"
+          name: "全局变量在步骤中可访问"
+
+  teardown:
+    # 用例级后置钩子：清理当前用例的数据
+    
+    - name: "用例 Teardown：删除测试文章"
+      type: http
+      method: DELETE
+      endpoint: "${base_url}/posts/${post_id}"
+      
+      headers:
+        Authorization: "Bearer ${admin_token}"
+      
+      condition: "${post_id} is not none"  # 文章 ID 存在时才删除
+      
+      ignore_failure: true  # 清理失败不标记测试失败
+
+    - name: "用例 Teardown：记录测试日志"
+      type: command
+      command: "echo 'Test case completed at $(date)' >> test_hooks.log"
+      
+      ignore_failure: true
+
+- name: "测试用例 2：条件执行和失败处理演示"
+  description: |
+    演示钩子的高级特性：
+    1. condition 条件执行
+    2. ignore_failure 失败忽略
+    3. 变量提取和传递
+
+  setup:
+    - name: "尝试创建重复资源（预期可能失败）"
+      type: http
+      method: POST
+      endpoint: "${base_url}/posts"
+      
+      json:
+        title: "重复文章"
+        content: "测试重复创建"
+      
+      ignore_failure: true  # 即使失败也继续执行
+      
+      extract:
+        duplicate_post_id: "data.post.id"  # 如果成功则提取
+
+  steps:
+    - name: "检查资源状态"
+      method: GET
+      endpoint: "${base_url}/posts/${duplicate_post_id}"
+      
+      condition: "${duplicate_post_id} is not none"  # 仅当资源创建成功时
+      
+      assertions:
+        - type: status_code
+          expected: 200
+
+  teardown:
+    - name: "条件性清理"
+      type: http
+      method: DELETE
+      endpoint: "${base_url}/posts/${duplicate_post_id}"
+      
+      condition: "${duplicate_post_id} is not none"
+      
+      ignore_failure: true

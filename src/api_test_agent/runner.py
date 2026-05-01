@@ -1,5 +1,6 @@
 """
 API 接口自动化测试 Agent - 测试执行器
+支持钩子引擎和数据驱动的集成
 """
 import yaml
 import json
@@ -8,9 +9,23 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
-from api_client import APIClient, APIResponse
-from assert_engine import AssertEngine, AssertionResult
-from config import config
+
+from .client import APIClient, APIResponse
+from .assertions import AssertEngine, AssertionResult
+from .config import config
+
+# 尝试导入新模块（可选依赖）
+try:
+    from .hooks import HookEngine
+    HOOK_ENGINE_AVAILABLE = True
+except ImportError:
+    HOOK_ENGINE_AVAILABLE = False
+
+try:
+    from .data_driver import DataDriver, DataSourceConfig
+    DATA_DRIVER_AVAILABLE = True
+except ImportError:
+    DATA_DRIVER_AVAILABLE = False
 
 
 @dataclass
@@ -205,7 +220,115 @@ class TestRunner:
         return response, step_result
     
     def execute_test_case(self, test_case: Dict) -> TestCaseResult:
-        """执行单个测试用例"""
+        """执行单个测试用例
+
+        支持钩子引擎集成：如果测试用例定义了 hooks（setup/teardown/global_setup/global_teardown），
+        将委托给 HookEngine 执行完整的生命周期。
+
+        Args:
+            test_case: 测试用例配置字典
+
+        Returns:
+            TestCaseResult 测试结果
+        """
+        # 检测是否定义了 hooks
+        has_hooks = any([
+            test_case.get('setup'),
+            test_case.get('teardown'),
+            test_case.get('global_setup'),
+            test_case.get('global_teardown')
+        ])
+
+        # 如果有 hooks 且 HookEngine 可用，使用钩子引擎执行
+        if has_hooks and HOOK_ENGINE_AVAILABLE:
+            return self._execute_with_hooks(test_case)
+
+        # 否则使用原有的执行逻辑（向后兼容）
+        return self._execute_test_case_original(test_case)
+
+    def _execute_with_hooks(self, test_case: Dict) -> TestCaseResult:
+        """使用 HookEngine 执行带钩子的测试用例
+
+        Args:
+            test_case: 包含 hooks 配置的测试用例
+
+        Returns:
+            TestCaseResult 测试结果
+        """
+        self.logger.info("检测到钩子配置，使用 HookEngine 执行")
+
+        try:
+            hook_engine = HookEngine(base_url=self.client.base_url)
+
+            # 设置全局钩子
+            global_setup = test_case.get('global_setup', [])
+            global_teardown = test_case.get('global_teardown', [])
+            if global_setup or global_teardown:
+                hook_engine.set_global_hooks(
+                    setup_hooks=global_setup,
+                    teardown_hooks=global_teardown
+                )
+
+            # 使用 HookEngine 执行完整生命周期
+            hook_result = hook_engine.execute_test_case_with_hooks(test_case)
+
+            # 转换 HookEngine 结果为 TestCaseResult 格式
+            step_results = hook_result.get('step_results', [])
+            passed_steps = sum(1 for step in step_results if step.get("passed", False))
+            failed_steps = len(step_results) - passed_steps
+
+            total_time = 0.0
+            for result_list in [
+                hook_result.get('global_setup_results', []),
+                hook_result.get('setup_results', []),
+                hook_result.get('teardown_results', []),
+                hook_result.get('global_teardown_results', [])
+            ]:
+                for r in result_list:
+                    if hasattr(r, 'duration'):
+                        total_time += r.duration
+
+            # 从步骤结果中计算总时间
+            for step in step_results:
+                if isinstance(step, dict) and 'response_time' in step:
+                    total_time += step['response_time']
+
+            passed = hook_result.get('status') == 'PASS'
+            error_message = hook_result.get('error_message')
+
+            result = TestCaseResult(
+                name=test_case.get("name", "Unnamed Test"),
+                description=test_case.get("description", ""),
+                passed=passed,
+                total_steps=len(step_results),
+                passed_steps=passed_steps,
+                failed_steps=failed_steps,
+                step_results=step_results,
+                total_time=round(total_time, 3),
+                error_message=error_message
+            )
+
+            self.logger.info(f"HookEngine 执行完成: {'通过' if passed else '失败'}")
+            return result
+
+        except Exception as e:
+            self.logger.error(f"HookEngine 执行失败: {e}")
+            self.logger.info("回退到原始执行模式")
+            return self._execute_test_case_original(test_case)
+
+        finally:
+            if 'hook_engine' in locals():
+                hook_engine.close()
+
+    def _execute_test_case_original(self, test_case: Dict) -> TestCaseResult:
+        """原始的测试用例执行逻辑（向后兼容）
+
+        Args:
+            test_case: 测试用例配置字典
+
+        Returns:
+            TestCaseResult 测试结果
+        """
         start_time = datetime.now()
         
         name = test_case.get("name", "Unnamed Test")
@@ -281,11 +404,28 @@ class TestRunner:
         return result
     
     def execute_test_file(self, file_path: str) -> TestSuiteResult:
-        """执行测试文件"""
+        """执行测试文件
+
+        支持数据驱动：如果文件中定义了 data_source 配置，
+        将使用 DataDriver 批量生成多个测试用例。
+
+        Args:
+            file_path: 测试文件路径
+
+        Returns:
+            TestSuiteResult 测试套件结果
+        """
         start_time = datetime.now()
         test_case = self.load_test_case(file_path)
-        
-        # 处理可能是列表的情况
+
+        # 检测是否配置了数据源
+        data_source_config = test_case.get('data_source') if isinstance(test_case, dict) else None
+
+        if data_source_config and DATA_DRIVER_AVAILABLE:
+            # 数据驱动模式
+            return self._execute_with_data_driver(file_path, test_case, data_source_config)
+
+        # 处理可能是列表的情况（原有逻辑）
         if isinstance(test_case, list):
             results = [self.execute_test_case(tc) for tc in test_case]
             suite_name = Path(file_path).stem
@@ -294,13 +434,13 @@ class TestRunner:
             result = self.execute_test_case(test_case)
             suite_name = test_case.get("name", Path(file_path).stem)
             test_results = [result]
-        
+
         end_time = datetime.now()
         total_time = (end_time - start_time).total_seconds()
-        
+
         passed_tests = sum(1 for r in test_results if r.passed)
         failed_tests = len(test_results) - passed_tests
-        
+
         return TestSuiteResult(
             suite_name=suite_name,
             start_time=start_time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -311,6 +451,85 @@ class TestRunner:
             total_time=round(total_time, 3),
             test_results=test_results
         )
+
+    def _execute_with_data_driver(self, file_path: str, test_case: Dict, data_source_config: Dict) -> TestSuiteResult:
+        """使用 DataDriver 执行数据驱动的测试
+
+        Args:
+            file_path: 原始测试文件路径
+            test_case: 包含 data_source 的测试用例
+            data_source_config: 数据源配置字典
+
+        Returns:
+            TestSuiteResult 测试套件结果
+        """
+        start_time = datetime.now()
+        self.logger.info(f"检测到数据源配置，使用 DataDriver 生成测试用例")
+
+        try:
+            # 构建 DataSourceConfig 对象
+            ds_config = DataSourceConfig(
+                type=data_source_config.get('type', 'csv'),
+                file=data_source_config.get('file', ''),
+                mapping=data_source_config.get('mapping', {}),
+                filter=data_source_config.get('filter'),
+                case_name_template=data_source_config.get('case_name_template', '{name}_{row_index}')
+            )
+
+            # 创建模板（移除 data_source 字段）
+            template = {k: v for k, v in test_case.items() if k != 'data_source'}
+
+            # 使用 DataDriver 生成测试用例
+            driver = DataDriver()
+            generated_cases = driver.generate_test_cases(ds_config, template)
+
+            self.logger.info(f"DataDriver 生成了 {len(generated_cases)} 个测试用例")
+
+            # 执行所有生成的测试用例
+            test_results = []
+            for gen_case in generated_cases:
+                self.logger.debug(f"生成的用例: {gen_case.name}")
+                self.logger.debug(f"用例配置 keys: {list(gen_case.config.keys())}")
+                self.logger.debug(f"steps 存在: {'steps' in gen_case.config}")
+                if 'steps' in gen_case.config:
+                    self.logger.debug(f"steps 数量: {len(gen_case.config['steps'])}")
+                result = self.execute_test_case(gen_case.config)
+                test_results.append(result)
+
+            end_time = datetime.now()
+            total_time = (end_time - start_time).total_seconds()
+
+            passed_tests = sum(1 for r in test_results if r.passed)
+            failed_tests = len(test_results) - passed_tests
+
+            return TestSuiteResult(
+                suite_name=f"{Path(file_path).stem} (DataDriven: {len(generated_cases)} cases)",
+                start_time=start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                end_time=end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                total_tests=len(test_results),
+                passed_tests=passed_tests,
+                failed_tests=failed_tests,
+                total_time=round(total_time, 3),
+                test_results=test_results
+            )
+
+        except Exception as e:
+            self.logger.error(f"DataDriver 执行失败: {e}")
+            self.logger.info("回退到原始执行模式")
+            # 回退：移除 data_source 后执行原始用例
+            fallback_case = {k: v for k, v in test_case.items() if k != 'data_source'}
+            result = self.execute_test_case(fallback_case)
+
+            return TestSuiteResult(
+                suite_name=Path(file_path).stem,
+                start_time=start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                end_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                total_tests=1,
+                passed_tests=1 if result.passed else 0,
+                failed_tests=0 if result.passed else 1,
+                total_time=result.total_time,
+                test_results=[result]
+            )
     
     def execute_test_directory(self, directory: str) -> TestSuiteResult:
         """执行目录下所有测试文件"""

@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import List
 from datetime import datetime
 from dataclasses import asdict
-from test_runner import TestSuiteResult, TestCaseResult
+
+from .runner import TestSuiteResult, TestCaseResult
 
 
 class ReportGenerator:

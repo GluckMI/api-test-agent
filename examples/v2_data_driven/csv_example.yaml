@@ -1,0 +1,112 @@
+# ============================================================
+# API Test Agent v2.0 - CSV 数据驱动测试示例
+# ============================================================
+#
+# 本示例展示如何使用 CSV 文件作为数据源进行参数化测试
+#
+# 核心概念：
+# 1. data_source: 定义外部数据文件（CSV/JSON）
+# 2. template.steps: 测试步骤模板（使用 ${data.xxx} 占位符）
+# 3. 每一行数据会生成一个独立的测试用例
+#
+# 数据文件：test_data/login_cases.csv
+# 包含 8 组登录测试数据（正常、异常、边界情况）
+#
+# 运行方法：
+#   python api_test_agent.py run examples/v2_data_driven/csv_example.yaml --env dev
+#
+# 预期结果：
+#   自动生成 8 个测试用例，分别对应 CSV 的每一行数据
+# ============================================================
+
+data_source:
+  # 数据源类型：csv（也支持 json、yaml）
+  type: csv
+  
+  # 数据文件路径（相对于项目根目录）
+  file: test_data/login_cases.csv
+  
+  # 可选：列名映射（如果 CSV 列名与占位符名不同）
+  # mapping:
+  #   username: user
+  #   password: pass
+  
+  # 可选：过滤条件（只运行符合条件的数据行）
+  # filter:
+  #   expected_status: "200"
+  
+  # 用例名称模板（支持变量：
+  #   {name}: 原始名称
+  #   {row_index}: 行索引（从 0 开始）
+  #   {data.xxx}: 数据列的值
+  case_name_template: "登录测试_{data.test_name}_{row_index}"
+
+template:
+  # 测试用例模板
+  # ${data.column_name} 会被替换为对应列的值
+  
+  name: "CSV 数据驱动登录测试"
+  
+  description: |
+    从 login_cases.csv 加载测试数据
+    每行数据生成一个独立测试用例
+    覆盖正常登录和各种异常场景
+
+  steps:
+    - name: "执行登录请求"
+      method: POST
+      endpoint: "${base_url}/auth/login"
+      
+      headers:
+        Content-Type: "application/json"
+      
+      json:
+        username: "${data.username}"
+        password: "${data.password}"
+      
+      extract:
+        token: "data.token"
+        user_id: "data.user.id"
+      
+      assertions:
+        - type: status_code
+          expected: "${data.expected_status}"  # 从数据源读取预期状态码
+          name: "HTTP 状态码符合预期"
+        
+        - type: response_time
+          max: 5.0
+          name: "响应时间合理"
+
+    - name: "验证响应消息（仅当登录成功时）"
+      method: GET
+      endpoint: "${base_url}/users/${user_id}"
+      
+      condition: "${data.expected_status} == '200'"
+      
+      headers:
+        Authorization: "Bearer ${token}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+          name: "Token 有效，可访问受保护资源"
+
+  setup:
+    # 可选：每个用例的前置操作
+    - name: "确保测试用户存在"
+      type: http
+      method: POST
+      endpoint: "${base_url}/tests/ensure-user"
+      
+      json:
+        username: "${data.username}"
+        
+      ignore_failure: true
+
+  teardown:
+    # 可选：每个用例的后置清理
+    - name: "清理测试会话"
+      type: command
+      command: "echo 'Completed test case: ${data.test_name}' >> data_driven_test.log"
+      
+      ignore_failure: true

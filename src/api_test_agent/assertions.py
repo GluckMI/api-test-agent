@@ -4,7 +4,8 @@ API 接口自动化测试 Agent - 断言引擎
 import re
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
-from api_client import APIResponse
+
+from .client import APIResponse
 
 
 @dataclass

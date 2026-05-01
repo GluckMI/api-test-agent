@@ -1,0 +1,178 @@
+# ============================================================
+# API Test Agent v2.0 - Setup/Teardown 行为演示
+# ============================================================
+#
+# 本示例重点演示：
+# 1. Setup 失败时 Teardown 仍会执行的行为
+# 2. ignore_failure 参数的使用场景
+# 3. 错误恢复和资源清理保证
+#
+# 核心原则：
+# ✅ 无论 setup 是否成功，teardown 都会执行
+# ✅ teardown 的失败不会覆盖原始错误
+# ✅ 使用 ignore_failure 控制失败传播
+#
+# 运行方法：
+#   python api_test_agent.py run examples/v2_hooks/setup_teardown_demo.yaml --env dev
+# ============================================================
+
+- name: "演示 1：Setup 失败时 Teardown 仍执行"
+  description: |
+    这是一个关键行为演示：
+    即使 setup 阶段失败，teardown 仍然会被执行
+    这确保了资源的正确清理，避免泄漏
+
+  setup:
+    # 这个 setup 会失败（访问不存在的端点）
+    - name: "失败的 Setup：访问不存在的服务"
+      type: http
+      method: GET
+      endpoint: "${base_url}/nonexistent-endpoint-12345"
+      
+      timeout: 5
+      
+      ignore_failure: false  # 失败会阻止步骤执行
+      
+      extract:
+        should_not_exist: "data.value"  # 不会被提取
+
+  steps:
+    # 这些步骤不会被执行（因为 setup 失败了）
+    - name: "这个步骤不会执行"
+      method: GET
+      endpoint: "${base_url}/users"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+
+  teardown:
+    # ⚠️ 重要：即使 setup 失败，这里的 teardown 仍会执行！
+    
+    - name: "Teardown 一定会执行：记录失败信息"
+      type: command
+      command: "echo '[TEARDOWN] Setup failed, but teardown still runs' >> hooks_demo.log"
+      
+      ignore_failure: true
+    
+    - name: "Teardown：清理可能的残留资源"
+      type: http
+      method: DELETE
+      endpoint: "${base_url}/cleanup/temp-resources"
+      
+      ignore_failure: true  # 清理失败不影响整体结果
+
+- name: "演示 2：ignore_failure 的实际应用场景"
+  description: |
+    展示 ignore_failure 的典型使用场景：
+    1. 可选的初始化步骤（如预热缓存）
+    2. 尝试性的清理操作（如删除可能不存在的资源）
+    3. 日志记录和监控上报（不应影响测试结果）
+
+  setup:
+    # 场景 A：可选的预热操作
+    - name: "可选 Setup：预热 Redis 缓存"
+      type: command
+      command: "redis-cli FLUSHDB"  # 可能 redis 未启动
+      
+      ignore_failure: true  # redis 不可用时继续测试
+      
+      timeout: 3
+
+    # 场景 B：尝试性创建资源（幂等操作）
+    - name: "幂等 Setup：确保测试目录存在"
+      type: command
+      command: "mkdir -p /tmp/test_artifacts"
+      
+      ignore_failure: true
+
+  steps:
+    - name: "正常测试步骤"
+      method: GET
+      endpoint: "https://jsonplaceholder.typicode.com/posts/1"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: contains_key
+          key: "title"
+
+  teardown:
+    # 场景 C：清理可能不存在的临时文件
+    - name: "安全清理：删除临时文件（如果存在）"
+      type: command
+      command: "rm -f /tmp/test_artifacts/test_*.tmp || true"
+      
+      ignore_failure: true
+
+    # 场景 D：发送测试结果通知（失败不影响测试）
+    - name: "通知：上报测试结果到监控系统"
+      type: command
+      command: "curl -s -X POST https://hooks.example.com/notify -d 'status=completed' || echo 'Notification failed'"
+      
+      ignore_failure: true
+      
+      timeout: 5
+
+- name: "演示 3：多级错误恢复策略"
+  description: |
+    演示复杂的错误处理链：
+    1. 第一个 hook 失败但被忽略
+    2. 第二个 hook 成功并提取变量
+    3. 步骤正常执行
+    4. teardown 清理所有资源
+
+  setup:
+    - name: "Step 1：可能失败的操作（已忽略）"
+      type: http
+      method: POST
+      endpoint: "${base_url}/legacy/init"
+      
+      ignore_failure: true  # 旧接口可能不存在
+      
+      timeout: 3
+
+    - name: "Step 2：必须成功的初始化"
+      type: http
+      method: POST
+      endpoint: "${base_url}/tests/init-session"
+      
+      json:
+        test_name: "error_recovery_demo"
+        timestamp: "2026-01-01T00:00:00Z"
+      
+      extract:
+        session_id: "data.session.id"
+        session_token: "data.session.token"
+      
+      ignore_failure: false  # 这个必须成功
+
+  steps:
+    - name: "使用 session 进行测试"
+      method: GET
+      endpoint: "${base_url}/tests/${session_id}/status"
+      
+      headers:
+        X-Session-Token: "${session_token}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: equal
+          path: "session_id"
+          expected_from_extract: "session_id"
+
+  teardown:
+    - name: "清理 Session"
+      type: http
+      method: DELETE
+      endpoint: "${base_url}/tests/${session_id}"
+      
+      headers:
+        X-Session-Token: "${session_token}"
+      
+      condition: "${session_id} is not none"
+      
+      ignore_failure: true

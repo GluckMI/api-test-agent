@@ -1,0 +1,103 @@
+# ============================================================
+# API Test Agent v2.0 - 环境配置文件
+# ============================================================
+# 此文件定义了多个测试环境的配置，支持 dev/staging/prod 三级环境
+#
+# 使用方法：
+#   python api_test_agent.py run tests/ --env dev
+#   python api_test_agent.py run tests/ --env staging
+#   python api_test_agent.py run tests/ --env prod
+#
+# 配置合并优先级（从低到高）：
+#   1. defaults（全局默认配置）
+#   2. environments.{env_name}（环境特定配置）
+#   3. .env 文件中的环境变量
+#   4. 命令行 --var 参数覆盖（最高优先级）
+# ============================================================
+
+defaults:
+  # 全局默认超时时间（秒）
+  timeout: 30
+  
+  # 全局默认请求头
+  headers:
+    Content-Type: "application/json"
+    Accept: "application/json"
+    User-Agent: "API-Test-Agent/2.0"
+  
+  # 全局默认日志级别
+  log_level: "INFO"
+  
+  # 全局默认变量（可在测试用例中通过 ${var_name} 引用）
+  variables:
+    api_version: "v1"
+    default_page_size: 20
+    retry_count: 3
+
+environments:
+  # ----------------------------------------------------------
+  # 开发环境 (Development)
+  # 用于本地开发和调试，通常连接本地服务
+  # ----------------------------------------------------------
+  dev:
+    base_url: "http://localhost:8080/api"
+    
+    timeout: 10
+    
+    headers:
+      X-Environment: "development"
+      X-Debug: "true"
+    
+    variables:
+      debug_mode: true
+      database: "dev_db"
+      
+    # 说明：dev 环境通常不需要 .env 文件
+    # 敏感信息可以直接写在配置中（仅限开发环境）
+
+  # ----------------------------------------------------------
+  # 预发布环境 (Staging)
+  # 用于集成测试和预发布验证，接近生产环境配置
+  # 会自动加载 configs/.env.staging 文件中的敏感信息
+  # ----------------------------------------------------------
+  staging:
+    base_url: "https://staging-api.example.com/v1"
+    
+    timeout: 30
+    
+    headers:
+      X-Environment: "staging"
+      X-Request-ID: "${request_id}"
+    
+    variables:
+      debug_mode: false
+      feature_flags:
+        new_api: true
+        beta_features: true
+      
+    # .env.staging 文件会自动加载，包含：
+    # STAGING_API_KEY, STAGING_DB_PASSWORD 等
+
+  # ----------------------------------------------------------
+  # 生产环境 (Production)
+  # 用于生产环境的冒烟测试和监控
+  # 会自动加载 configs/.env.prod 文件中的敏感信息
+  # ⚠️ 请谨慎操作，避免影响真实用户
+  # ----------------------------------------------------------
+  prod:
+    base_url: "https://api.example.com/v1"
+    
+    timeout: 60
+    
+    headers:
+      X-Environment: "production"
+      X-Request-ID: "${request_id}"
+    
+    variables:
+      debug_mode: false
+      feature_flags:
+        new_api: false
+        beta_features: false
+      
+    # 生产环境使用更严格的超时和重试策略
+    # .env.prod 文件包含：PROD_API_KEY, PROD_DB_PASSWORD 等

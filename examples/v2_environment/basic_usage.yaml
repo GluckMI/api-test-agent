@@ -1,0 +1,94 @@
+# ============================================================
+# API Test Agent v2.0 - 环境管理基本用法示例
+# ============================================================
+# 
+# 本示例展示如何使用 --env 参数切换测试环境
+# 以及如何在测试用例中引用环境变量 ${base_url}
+#
+# 运行方法：
+#   # 使用 dev 环境
+#   python api_test_agent.py run examples/v2_environment/basic_usage.yaml --env dev
+#
+#   # 使用 staging 环境
+#   python api_test_agent.py run examples/v2_environment/basic_usage.yaml --env staging
+#
+#   # 查看当前生效的配置
+#   python api_test_agent.py run examples/v2_environment/basic_usage.yaml --env dev --show-config
+# ============================================================
+
+- name: "环境变量使用演示 - 获取用户列表"
+  description: |
+    演示如何使用环境配置中的 base_url 变量
+    通过 ${base_url} 引用当前环境的 API 地址
+    无需在测试用例中硬编码 URL
+
+  steps:
+    - name: "获取所有用户"
+      method: GET
+      # 使用环境变量 base_url，自动根据 --env 参数切换
+      endpoint: "${base_url}/users"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+          name: "请求成功返回 200"
+        
+        - type: response_time
+          max: 5.0
+          name: "响应时间小于 5 秒"
+        
+        - type: type_check
+          path: "$"
+          expected_type: list
+          name: "返回数据为数组格式"
+
+    - name: "获取单个用户详情"
+      method: GET
+      endpoint: "${base_url}/users/1"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: contains_key
+          key: "id"
+          name: "包含用户 ID 字段"
+        
+        - type: contains_key
+          key: "name"
+          name: "包含用户名字段"
+        
+        - type: equal
+          path: "id"
+          expected: 1
+          name: "用户 ID 为 1"
+
+- name: "环境变量 + 自定义变量组合使用"
+  description: |
+    演示同时使用环境变量和自定义变量的场景
+    environments.yaml 中定义的 variables 可通过 ${var_name} 引用
+
+  steps:
+    - name: "分页获取用户（使用自定义变量）"
+      method: GET
+      endpoint: "${base_url}/users"
+      params:
+        _page: 1
+        _limit: "${default_page_size}"
+      
+      assertions:
+        - type: status_code
+          expected: 200
+        
+        - type: length
+          path: "$"
+          expected: 20
+          name: "返回数量等于 default_page_size"
+
+    - name: "使用 API 版本变量"
+      method: GET
+      endpoint: "${base_url.replace('/v1', '')}/${api_version}/posts"
+      
+      assertions:
+        - type: status_code
+          expected: 200
