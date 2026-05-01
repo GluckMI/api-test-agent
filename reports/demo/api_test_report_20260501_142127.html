@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 测试报告 - 我的第一个 API 测试</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+                background: #f5f5f5; padding: 20px; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; 
+                  padding: 30px; border-radius: 10px; margin-bottom: 20px; }
+        .header h1 { font-size: 2em; margin-bottom: 10px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+                 gap: 15px; margin-top: 20px; }
+        .stat-card { background: rgba(255,255,255,0.2); padding: 20px; border-radius: 8px; 
+                     text-align: center; }
+        .stat-value { font-size: 2em; font-weight: bold; }
+        .stat-label { font-size: 0.9em; opacity: 0.9; }
+        .summary { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px;
+                   box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .summary-bar { height: 30px; background: #e0e0e0; border-radius: 15px; overflow: hidden; 
+                       margin: 15px 0; display: flex; }
+        .bar-passed { background: #4caf50; transition: width 0.3s; }
+        .bar-failed { background: #f44336; transition: width 0.3s; }
+        .test-case { background: white; padding: 20px; border-radius: 10px; margin-bottom: 15px;
+                     box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .test-caseHeader { display: flex; justify-content: space-between; align-items: center; 
+                          margin-bottom: 15px; cursor: pointer; }
+        .test-case-title { font-size: 1.2em; font-weight: bold; }
+        .test-case.status-success { border-left: 4px solid #4caf50; }
+        .test-case.status-failure { border-left: 4px solid #f44336; }
+        .step-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .step-table th, .step-table td { padding: 10px; text-align: left; 
+                                         border-bottom: 1px solid #e0e0e0; }
+        .step-table th { background: #f5f5f5; font-weight: 600; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; 
+                font-size: 0.85em; font-weight: 500; }
+        .badge-success { background: #e8f5e9; color: #4caf50; }
+        .badge-error { background: #ffebee; color: #f44336; }
+        .badge-info { background: #e3f2fd; color: #2196f3; }
+        .details { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .details.open { max-height: 2000px; }
+        .error-msg { background: #ffebee; padding: 10px; border-radius: 5px; 
+                     color: #c62828; margin: 10px 0; }
+        .assertion { background: #fff3e0; padding: 10px; margin: 5px 0; border-radius: 5px;
+                     border-left: 3px solid #ff9800; }
+        .method { display: inline-block; padding: 2px 8px; border-radius: 4px; 
+                  font-size: 0.8em; font-weight: bold; }
+        .method-GET { background: #e3f2fd; color: #1976d2; }
+        .method-POST { background: #e8f5e9; color: #388e3c; }
+        .method-PUT { background: #fff3e0; color: #f57c00; }
+        .method-DELETE { background: #ffebee; color: #d32f2f; }
+        .method-PATCH { background: #f3e5f5; color: #7b1fa2; }
+        @media (max-width: 768px) { .stats { grid-template-columns: 1fr 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 API 接口自动化测试报告</h1>
+            <p>我的第一个 API 测试</p>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value">1</div>
+                    <div class="stat-label">总用例数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #4caf50;">0</div>
+                    <div class="stat-label">通过</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #f44336;">1</div>
+                    <div class="stat-label">失败</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">0.0%</div>
+                    <div class="stat-label">通过率</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary">
+            <h3>📊 执行摘要</h3>
+            <p><strong>开始时间:</strong> 2026-05-01 14:21:27</p>
+            <p><strong>结束时间:</strong> 2026-05-01 14:21:27</p>
+            <p><strong>总耗时:</strong> 0.610 秒</p>
+            <div class="summary-bar">
+                <div class="bar-passed" style="width: 0.0%"></div>
+                <div class="bar-failed" style="width: 100.0%"></div>
+            </div>
+        </div>
+
+        <h2 style="margin-bottom: 15px;">🧪 测试详情</h2>
+
+        <div class="test-case status-failure">
+            <div class="test-caseHeader" onclick="toggleDetails(this)">
+                <div>
+                    <span class="test-case-title">1. 我的第一个 API 测试</span>
+                    <br><small style="color: #666;">这是一个超简单的入门示例</small>
+                </div>
+                <div>
+                    <span class="badge badge-info">0/1 步骤</span>
+                    <span class="badge badge-error">❌ 失败</span>
+                </div>
+            </div>
+            <div class="details">
+<div class="error-msg">⚠️ argument of type 'NoneType' is not iterable</div>
+
+                <table class="step-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>步骤名称</th>
+                            <th>方法</th>
+                            <th>端点</th>
+                            <th>状态码</th>
+                            <th>耗时 (s)</th>
+                            <th>结果</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+
+                        <tr>
+                            <td>1</td>
+                            <td>获取用户信息</td>
+                            <td><span class="method method-GET">GET</span></td>
+                            <td><code></code></td>
+                            <td>N/A</td>
+                            <td>N/A</td>
+                            <td><span class="badge badge-error">❌</span></td>
+                        </tr>
+
+                    </tbody>
+                </table>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function toggleDetails(header) {
+            const details = header.nextElementSibling;
+            details.classList.toggle('open');
+        }
+        
+        // 默认展开失败的测试用例
+        document.querySelectorAll('.test-case.status-failure .details').forEach(el => {
+            el.classList.add('open');
+        });
+    </script>
+</body>
+</html>
