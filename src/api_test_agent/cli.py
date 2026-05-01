@@ -87,6 +87,27 @@ def main():
     env_show_parser.add_argument('environment', help='要查看的环境名称')
     env_show_parser.add_argument('--no-sanitize', action='store_true',
                                 help='显示完整配置（不脱敏敏感信息）')
+
+    # perf 子命令
+    perf_parser = subparsers.add_parser('perf', help='性能测试')
+    perf_parser.add_argument('endpoint', help='要测试的 API 端点')
+    perf_parser.add_argument('-m', '--method', default='GET',
+                            help='HTTP 方法 (默认：GET)')
+    perf_parser.add_argument('-d', '--duration', type=float, default=60.0,
+                            help='测试持续时间（秒，默认：60）')
+    perf_parser.add_argument('-r', '--rps', type=float, default=None,
+                            help='目标 RPS（每秒请求数，默认：不限速）')
+    perf_parser.add_argument('-c', '--concurrent', type=int, default=10,
+                            help='并发用户数（默认：10）')
+    perf_parser.add_argument('--ramp-up', type=float, default=0.0,
+                            help='爬坡时间（秒，默认：0）')
+    perf_parser.add_argument('-i', '--iterations', type=int, default=None,
+                            help='固定次数模式（与 --duration 互斥）')
+    perf_parser.add_argument('--thresholds', type=str, default=None,
+                            help='阈值配置文件路径（JSON/YAML）')
+    perf_parser.add_argument('--base-url', help='API 基础 URL（覆盖配置）')
+    perf_parser.add_argument('-o', '--output', default='reports',
+                            help='报告输出目录 (默认：reports)')
     
     args = parser.parse_args()
     
@@ -96,6 +117,8 @@ def main():
         init_project(args)
     elif args.command == 'env':
         handle_env_command(args)
+    elif args.command == 'perf':
+        run_perf_test(args)
     else:
         parser.print_help()
 
@@ -477,3 +500,156 @@ def handle_env_command(args):
     except FileNotFoundError as e:
         print_error(str(e))
         sys.exit(1)
+
+
+def run_perf_test(args):
+    """执行性能测试
+
+    Args:
+        args: 命令行参数
+    """
+    print_banner("⚡ API 性能测试")
+
+    try:
+        from .perf_tester import LoadTester, LoadTestConfig
+        from .perf_collector import PerfCollector
+    except ImportError as e:
+        print_error(f"性能测试模块不可用: {e}")
+        sys.exit(1)
+
+    # 获取 base_url
+    base_url = args.base_url
+    if not base_url:
+        # 尝试从配置文件获取
+        try:
+            test_config = Config()
+            base_url = test_config.get("base_url", "")
+        except:
+            base_url = ""
+    
+    if not base_url:
+        print_error("请提供 --base-url 参数或配置 base_url")
+        sys.exit(1)
+
+    # 加载阈值配置
+    thresholds = []
+    if args.thresholds:
+        try:
+            from .utils import load_config_file
+            thresholds_config = load_config_file(args.thresholds)
+            thresholds = thresholds_config.get("thresholds", [])
+        except Exception as e:
+            print_warning(f"加载阈值配置失败: {e}")
+
+    print_info(f"目标端点: {args.method} {args.endpoint}")
+    print_info(f"Base URL: {base_url}")
+    
+    if args.iterations:
+        print_info(f"模式: 固定次数 ({args.iterations} 次)")
+    else:
+        print_info(f"模式: 持续时间 ({args.duration}s)")
+        print_info(f"RPS 限制: {args.rps if args.rps else '无限制'}")
+        print_info(f"并发用户数: {args.concurrent}")
+        if args.ramp_up > 0:
+            print_info(f"爬坡时间: {args.ramp_up}s")
+
+    tester = LoadTester(base_url=base_url)
+
+    try:
+        if args.iterations:
+            # 固定次数模式
+            metrics = tester.run_single_endpoint_perf_test(
+                endpoint=args.endpoint,
+                method=args.method,
+                iterations=args.iterations
+            )
+            
+            # 显示结果
+            print(f"\n{tester.collector.get_summary_text(metrics)}")
+        else:
+            # 负载测试模式
+            config = LoadTestConfig(
+                endpoint=args.endpoint,
+                method=args.method,
+                duration=args.duration,
+                rps=args.rps,
+                concurrent_users=args.concurrent,
+                ramp_up_time=args.ramp_up,
+                thresholds=thresholds
+            )
+            
+            result = tester.run_load_test(config)
+            
+            # 显示结果
+            print(f"\n{tester.collector.get_summary_text(result.metrics)}")
+            print(f"\n实际执行:")
+            print(f"  持续时间: {result.actual_duration:.2f}s")
+            print(f"  实际 RPS: {result.actual_rps:.2f}")
+            print(f"  总请求数: {result.total_requests}")
+            
+            if result.errors:
+                print(f"\n错误列表 (前 5 条):")
+                for err in result.errors[:5]:
+                    print(f"  ✗ {err}")
+
+        # 保存性能报告
+        output_dir = Path(args.output)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 导出为 JSON
+        from datetime import datetime
+        report_file = output_dir / f"perf_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        
+        metrics_dict = {
+            "total_requests": tester.collector.records.__len__() if hasattr(tester.collector, 'records') else 0,
+            "report_generated_at": datetime.now().isoformat(),
+            "metrics": {
+                "avg_response_time": 0,
+                "p95_response_time": 0,
+                "rps": 0
+            }
+        }
+        
+        if hasattr(tester, 'collector') and tester.collector.records:
+            metrics = tester.collector.calculate_metrics()
+            metrics_dict = {
+                "total_requests": metrics.total_requests,
+                "successful_requests": metrics.successful_requests,
+                "failed_requests": metrics.failed_requests,
+                "error_rate": metrics.error_rate,
+                "response_times": {
+                    "min": metrics.min_response_time,
+                    "avg": metrics.avg_response_time,
+                    "median": metrics.median_response_time,
+                    "p90": metrics.p90_response_time,
+                    "p95": metrics.p95_response_time,
+                    "p99": metrics.p99_response_time,
+                    "max": metrics.max_response_time
+                },
+                "rps": metrics.rps,
+                "throughput": metrics.throughput,
+                "status_code_distribution": metrics.status_code_distribution,
+                "endpoint_metrics": metrics.endpoint_metrics,
+                "threshold_violations": [
+                    {"metric": v.threshold.metric, "operator": v.threshold.operator,
+                     "value": v.threshold.value, "actual": v.actual_value,
+                     "severity": v.threshold.severity, "message": v.message}
+                    for v in metrics.threshold_violations
+                ]
+            }
+        
+        import json
+        with open(report_file, 'w', encoding='utf-8') as f:
+            json.dump(metrics_dict, f, indent=2, ensure_ascii=False)
+        
+        print(f"\n📄 性能报告已保存至: {report_file}")
+        
+    except KeyboardInterrupt:
+        print("\n性能测试已手动中断")
+        sys.exit(130)
+    except Exception as e:
+        print_error(f"性能测试执行失败: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+

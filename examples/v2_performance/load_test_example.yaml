@@ -1,0 +1,47 @@
+# 性能测试示例 - 负载测试
+# 演示如何使用 perf 子命令对 API 进行性能测试
+
+name: "用户列表接口性能测试"
+description: "测试 GET /users 接口在不同负载下的性能表现"
+
+# 测试配置
+test_config:
+  endpoint: "/users"
+  method: "GET"
+  base_url: "https://jsonplaceholder.typicode.com"
+
+# 负载参数
+load_params:
+  duration: 30  # 测试持续时间（秒）
+  concurrent_users: 5  # 并发用户数
+  rps: 10  # 目标 RPS（每秒请求数）
+  ramp_up_time: 5  # 爬坡时间（秒）
+
+# 性能阈值
+thresholds:
+  - name: "P95 响应时间"
+    metric: "p95"
+    operator: "<"
+    value: 2.0
+    severity: "critical"
+  
+  - name: "P99 响应时间"
+    metric: "p99"
+    operator: "<"
+    value: 5.0
+    severity: "warning"
+  
+  - name: "错误率"
+    metric: "error_rate"
+    operator: "<"
+    value: 0.05
+    severity: "critical"
+  
+  - name: "最小 RPS"
+    metric: "rps"
+    operator: ">="
+    value: 5.0
+    severity: "warning"
+
+# CLI 使用方式:
+# python api_test_agent.py perf /users -m GET --base-url https://jsonplaceholder.typicode.com -d 30 -c 5 -r 10 --thresholds examples/v2_performance/load_test_thresholds.yaml

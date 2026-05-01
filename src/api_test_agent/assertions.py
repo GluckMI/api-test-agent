@@ -1,8 +1,16 @@
 """
 API 接口自动化测试 Agent - 断言引擎
+
+支持 15 种断言类型，包括：
+- 基础断言：equal, not_equal, status_code, response_time
+- 包含断言：contains, not_contains, contains_key
+- 类型断言：type_check, length, regex_match
+- 空值断言：is_not_none, is_none
+- 范围断言：in_range
+- v2.0 新增：json_schema, custom, database
 """
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass
 
 from .client import APIResponse
@@ -201,6 +209,254 @@ class AssertEngine:
             actual=value
         )
     
+    @staticmethod
+    def json_schema(actual: Any, schema: Dict, name: str = "JSON Schema 检查") -> AssertionResult:
+        """
+        验证 JSON 数据是否符合指定的 Schema
+        
+        支持基本类型验证，无需安装 jsonschema 库
+        
+        Args:
+            actual: 实际 JSON 数据
+            schema: JSON Schema 定义
+            name: 断言名称
+        
+        Returns:
+            AssertionResult 断言结果
+        """
+        try:
+            errors = AssertEngine._validate_schema(actual, schema)
+            passed = len(errors) == 0
+            
+            if passed:
+                return AssertionResult(
+                    name=name,
+                    passed=True,
+                    message="JSON Schema 验证通过",
+                    expected="schema valid",
+                    actual="matched"
+                )
+            else:
+                return AssertionResult(
+                    name=name,
+                    passed=False,
+                    message=f"JSON Schema 验证失败: {'; '.join(errors)}",
+                    expected="schema valid",
+                    actual="; ".join(errors)
+                )
+        except Exception as e:
+            return AssertionResult(
+                name=name,
+                passed=False,
+                message=f"Schema 验证异常: {str(e)}",
+                expected="schema valid",
+                actual=str(e)
+            )
+    
+    @staticmethod
+    def _validate_schema(data: Any, schema: Dict, path: str = "$") -> List[str]:
+        """
+        递归验证 JSON 数据是否符合 Schema
+        
+        Args:
+            data: 实际数据
+            schema: Schema 定义
+            path: 当前路径（用于错误信息）
+        
+        Returns:
+            错误信息列表
+        """
+        errors = []
+        
+        # 类型检查
+        if "type" in schema:
+            type_errors = AssertEngine._check_type(data, schema["type"], path)
+            errors.extend(type_errors)
+            if type_errors:
+                return errors  # 类型不匹配，跳过后续检查
+        
+        # 对象类型检查
+        if isinstance(data, dict):
+            # required 字段检查
+            if "required" in schema:
+                for req_field in schema["required"]:
+                    if req_field not in data:
+                        errors.append(f"{path}: 缺少必填字段 '{req_field}'")
+            
+            # properties 检查
+            if "properties" in schema:
+                for prop_name, prop_schema in schema["properties"].items():
+                    if prop_name in data:
+                        prop_errors = AssertEngine._validate_schema(
+                            data[prop_name], prop_schema, f"{path}.{prop_name}"
+                        )
+                        errors.extend(prop_errors)
+        
+        # 数组类型检查
+        elif isinstance(data, list):
+            if "items" in schema:
+                for i, item in enumerate(data):
+                    item_errors = AssertEngine._validate_schema(
+                        item, schema["items"], f"{path}[{i}]"
+                    )
+                    errors.extend(item_errors)
+            
+            # 数组长度检查
+            if "minItems" in schema and len(data) < schema["minItems"]:
+                errors.append(f"{path}: 数组长度 {len(data)} < 最小值 {schema['minItems']}")
+            if "maxItems" in schema and len(data) > schema["maxItems"]:
+                errors.append(f"{path}: 数组长度 {len(data)} > 最大值 {schema['maxItems']}")
+        
+        # 字符串类型检查
+        elif isinstance(data, str):
+            if "minLength" in schema and len(data) < schema["minLength"]:
+                errors.append(f"{path}: 字符串长度 {len(data)} < 最小值 {schema['minLength']}")
+            if "maxLength" in schema and len(data) > schema["maxLength"]:
+                errors.append(f"{path}: 字符串长度 {len(data)} > 最大值 {schema['maxLength']}")
+            if "pattern" in schema and not re.match(schema["pattern"], data):
+                errors.append(f"{path}: 字符串不匹配模式 '{schema['pattern']}'")
+        
+        # 数字类型检查
+        elif isinstance(data, (int, float)):
+            if "minimum" in schema and data < schema["minimum"]:
+                errors.append(f"{path}: 值 {data} < 最小值 {schema['minimum']}")
+            if "maximum" in schema and data > schema["maximum"]:
+                errors.append(f"{path}: 值 {data} > 最大值 {schema['maximum']}")
+            if "enum" in schema and data not in schema["enum"]:
+                errors.append(f"{path}: 值 {data} 不在枚举值 {schema['enum']} 中")
+        
+        return errors
+    
+    @staticmethod
+    def _check_type(data: Any, expected_type: str, path: str) -> List[str]:
+        """检查数据类型"""
+        type_map = {
+            "string": str,
+            "number": (int, float),
+            "integer": int,
+            "boolean": bool,
+            "array": list,
+            "object": dict,
+            "null": type(None)
+        }
+        
+        expected_python_type = type_map.get(expected_type)
+        if expected_python_type is None:
+            return [f"{path}: 未知的 Schema 类型 '{expected_type}'"]
+        
+        # 特殊处理：JSON 的 number 包含 int 和 float
+        if expected_type == "number":
+            if not isinstance(data, (int, float)) or isinstance(data, bool):
+                return [f"{path}: 期望类型 {expected_type}，实际 {type(data).__name__}"]
+        elif expected_type == "integer":
+            if not isinstance(data, int) or isinstance(data, bool):
+                return [f"{path}: 期望类型 {expected_type}，实际 {type(data).__name__}"]
+        elif not isinstance(data, expected_python_type):
+            return [f"{path}: 期望类型 {expected_type}，实际 {type(data).__name__}"]
+        
+        return []
+    
+    @staticmethod
+    def custom(actual: Any, check_func: Callable[[Any], tuple], name: str = "自定义断言") -> AssertionResult:
+        """
+        自定义断言函数
+        
+        Args:
+            actual: 实际值
+            check_func: 自定义检查函数，签名：(actual) -> (passed: bool, message: str)
+            name: 断言名称
+        
+        Returns:
+            AssertionResult 断言结果
+        """
+        try:
+            passed, message = check_func(actual)
+            return AssertionResult(
+                name=name,
+                passed=passed,
+                message=message,
+                expected="custom check",
+                actual=str(actual)[:100]
+            )
+        except Exception as e:
+            return AssertionResult(
+                name=name,
+                passed=False,
+                message=f"自定义断言执行异常: {str(e)}",
+                expected="custom check",
+                actual=str(e)
+            )
+    
+    @staticmethod
+    def database(query_result: Any, expected_rows: int = None, 
+                expected_value: Any = None, path: str = None,
+                name: str = "数据库断言") -> AssertionResult:
+        """
+        数据库查询结果断言
+        
+        Args:
+            query_result: SQL 查询结果（列表或单个值）
+            expected_rows: 期望的行数
+            expected_value: 期望的值
+            path: 从结果中提取值的路径
+            name: 断言名称
+        
+        Returns:
+            AssertionResult 断言结果
+        """
+        try:
+            # 行数检查
+            if expected_rows is not None:
+                if isinstance(query_result, (list, tuple)):
+                    actual_rows = len(query_result)
+                    if actual_rows != expected_rows:
+                        return AssertionResult(
+                            name=name,
+                            passed=False,
+                            message=f"期望 {expected_rows} 行，实际 {actual_rows} 行",
+                            expected=expected_rows,
+                            actual=actual_rows
+                        )
+                else:
+                    return AssertionResult(
+                        name=name,
+                        passed=False,
+                        message="查询结果不是列表/元组，无法检查行数",
+                        expected=expected_rows,
+                        actual=type(query_result).__name__
+                    )
+            
+            # 值检查
+            if expected_value is not None:
+                value = query_result
+                if path:
+                    value = AssertEngine._get_value_by_path(query_result, path)
+                
+                if value != expected_value:
+                    return AssertionResult(
+                        name=name,
+                        passed=False,
+                        message=f"期望值 {expected_value}，实际 {value}",
+                        expected=expected_value,
+                        actual=value
+                    )
+            
+            return AssertionResult(
+                name=name,
+                passed=True,
+                message="数据库断言通过",
+                expected="query result valid",
+                actual="matched"
+            )
+        except Exception as e:
+            return AssertionResult(
+                name=name,
+                passed=False,
+                message=f"数据库断言执行异常: {str(e)}",
+                expected="query result valid",
+                actual=str(e)
+            )
+    
     @classmethod
     def validate_response(cls, response: APIResponse, assertions: List[Dict]) -> List[AssertionResult]:
         """
@@ -264,6 +520,65 @@ class AssertEngine:
                                         min_val=assertion.get("min"), 
                                         max_val=assertion.get("max"),
                                         name=assertion.get("name", "响应时间检查"))
+            # v2.0 新增断言类型
+            elif assert_type == "json_schema":
+                value = cls._get_value_by_path(response.body, assertion.get("path", "$"))
+                schema = assertion.get("schema", {})
+                result = cls.json_schema(value, schema, assertion.get("name", "JSON Schema 检查"))
+            elif assert_type == "custom":
+                value = cls._get_value_by_path(response.body, assertion.get("path", "$"))
+                script = assertion.get("script", "")
+                
+                # 从脚本字符串中执行自定义逻辑
+                try:
+                    local_vars = {"response": response.body, "value": value, "result": None}
+                    exec(script, {}, local_vars)
+                    check_result = local_vars.get("result")
+                    
+                    if check_result is None:
+                        result = AssertionResult(
+                            name=assertion.get("name", "自定义断言"),
+                            passed=False,
+                            message="自定义脚本未返回结果（需设置 result 变量）"
+                        )
+                    elif isinstance(check_result, tuple) and len(check_result) == 2:
+                        passed, message = check_result
+                        result = cls.custom(value, lambda v: (passed, message), assertion.get("name", "自定义断言"))
+                    elif isinstance(check_result, bool):
+                        result = AssertionResult(
+                            name=assertion.get("name", "自定义断言"),
+                            passed=check_result,
+                            message=f"自定义断言{'通过' if check_result else '失败'}",
+                            expected=True,
+                            actual=check_result
+                        )
+                    else:
+                        result = AssertionResult(
+                            name=assertion.get("name", "自定义断言"),
+                            passed=False,
+                            message=f"自定义脚本返回了无效的结果类型: {type(check_result)}"
+                        )
+                except Exception as e:
+                    result = AssertionResult(
+                        name=assertion.get("name", "自定义断言"),
+                        passed=False,
+                        message=f"自定义脚本执行异常: {str(e)}"
+                    )
+            elif assert_type == "database":
+                # 数据库断言：需要外部提供查询结果
+                query_result = assertion.get("query_result")
+                if query_result is None:
+                    result = AssertionResult(
+                        name=assertion.get("name", "数据库断言"),
+                        passed=False,
+                        message="数据库断言需要提供 query_result 参数"
+                    )
+                else:
+                    expected_rows = assertion.get("expected_rows")
+                    expected_value = assertion.get("expected_value")
+                    db_path = assertion.get("path")
+                    result = cls.database(query_result, expected_rows, expected_value, db_path, 
+                                        assertion.get("name", "数据库断言"))
             else:
                 # 未知断言类型，跳过
                 result = AssertionResult(

@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Phase 2 性能测试模块（perf_collector + perf_tester）
+- Phase 2 认证增强模块（OAuth 2.0 / JWT / API Key / HMAC）
+- Phase 2 断言增强（JSON Schema / Custom / Database）
+- CLI perf 子命令
+- 性能测试使用示例和文档
+- 认证增强示例和文档
+- 断言增强示例和文档
+- PyJWT 依赖支持
 - 项目计划、技术分析和扩展路线图文档
 - GitHub Actions CI/CD工作流配置
 - Issue 和 Pull Request 模板
@@ -16,6 +24,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - README.md 优化为符合 GitHub 规范的格式
 - 分离代码与管理文档到独立目录
+
+---
+
+## [2.1.0-alpha] - 2026-05-01
+
+### 🎉 New Features - Phase 2 能力增强
+
+#### ⚡ 性能测试模块（Performance Testing）
+- **负载测试模式**：`perf` 子命令支持对 API 进行压力测试
+- **RPS 控制**：通过 `RateLimiter` 实现每秒请求数精确控制
+- **持续时间控制**：`--duration` 参数指定测试时长（默认 60 秒）
+- **并发用户模拟**：`--concurrent` 参数控制并发用户数
+- **爬坡模式**：`--ramp-up` 参数实现渐进式负载增加
+- **固定次数模式**：`--iterations` 参数执行指定次数的请求
+- **阈值告警系统**：
+  - 支持 P50/P90/P95/P99 响应时间阈值
+  - 错误率阈值监控
+  - RPS 下限阈值
+  - warning/critical 两级严重程度
+- **性能指标收集**：
+  - 响应时间分布（最小/平均/中位数/P90/P95/P99/最大）
+  - 吞吐量统计（RPS、bytes/s）
+  - 状态码分布
+  - 端点级性能分析
+  - 时间序列数据（用于趋势图）
+- **性能报告生成**：自动保存 JSON 格式性能报告到 reports/ 目录
+- **CLI perf 子命令**：
+  ```bash
+  python api_test_agent.py perf /api/users --base-url https://api.example.com -d 60 -c 10 -r 50
+  python api_test_agent.py perf /api/users -i 1000 --base-url https://api.example.com
+  python api_test_agent.py perf /api/users --thresholds thresholds.yaml --base-url https://api.example.com
+  ```
+
+#### 🔐 认证增强模块（Authentication Enhancement）
+- **OAuth 2.0 完整支持**：
+  - Client Credentials 流程
+  - Resource Owner Password 流程
+  - Refresh Token 自动刷新
+  - Token 过期自动续期
+- **JWT 管理**：
+  - JWT Token 创建（支持 HS256/RS256 等算法）
+  - JWT 解码和验证
+  - 过期时间检测（无需密钥）
+  - 载荷提取
+  - 自动刷新机制
+- **API Key 认证**：
+  - Header 模式（默认 `X-API-Key`）
+  - Query 模式（URL 参数）
+  - Cookie 模式
+- **HMAC 签名认证**：
+  - SHA256 签名
+  - 时间戳防重放
+  - 自定义签名格式
+- **Basic Auth**：Base64 编码的用户名密码认证
+- **Bearer Token**：标准 Bearer Token 认证
+- **AuthManager 统一认证管理器**：
+  - 多 Token 注册和管理
+  - 自动 Token 刷新（带回调机制）
+  - 认证头自动注入
+  - 请求参数自动应用认证
+
+#### ✓ 断言增强（Assertion Enhancement）
+- **JSON Schema 验证**：
+  - 完整的 JSON Schema Draft 7 子集支持
+  - 类型验证（string/number/integer/boolean/array/object/null）
+  - 必填字段检查（required）
+  - 嵌套对象递归验证
+  - 数组长度限制（minItems/maxItems）
+  - 字符串长度和模式匹配（minLength/maxLength/pattern）
+  - 数值范围和枚举值检查（minimum/maximum/enum）
+  - 无需安装额外依赖（内置实现）
+- **自定义断言**：
+  - Python 脚本执行
+  - 可访问 response 和 value 变量
+  - 支持复杂业务逻辑验证
+  - 灵活的返回值格式（bool/tuple）
+- **数据库断言**：
+  - 查询结果行数检查
+  - 期望值验证
+  - JSON Path 提取
+  - 支持外部注入查询结果
+
+#### 📚 新增示例和文档
+- **性能测试示例**：
+  - `examples/v2_performance/load_test_example.yaml`：完整的负载测试配置示例
+- **认证增强示例**：
+  - `examples/v2_authentication/auth_examples.yaml`：7 种认证方式的完整示例
+  - 包含 Python 代码使用示例
+- **断言增强示例**：
+  - `examples/v2_assertions/assertion_examples.yaml`：JSON Schema / Custom / Database 断言示例
+  - 包含组合使用多种断言的完整场景
+
+### 📝 Changed - Phase 2 变更
+
+#### 依赖更新
+- 新增 `PyJWT>=2.6.0` 用于 JWT Token 管理
+
+#### 模块导出更新
+- `__init__.py` 新增 Phase 2 模块导出：
+  - PerfCollector / PerfMetrics / ThresholdConfig / ThresholdViolation / RequestRecord
+  - LoadTester / LoadTestConfig / LoadTestResult
+  - AuthManager / OAuth2Client / JWTManager / TokenInfo
+
+#### CLI 扩展
+- 新增 `perf` 子命令组：
+  - `endpoint` 位置参数：要测试的 API 端点
+  - `-m/--method`：HTTP 方法（默认 GET）
+  - `-d/--duration`：测试持续时间（秒）
+  - `-r/--rps`：目标 RPS
+  - `-c/--concurrent`：并发用户数
+  - `--ramp-up`：爬坡时间（秒）
+  - `-i/--iterations`：固定次数模式
+  - `--thresholds`：阈值配置文件路径
+  - `--base-url`：API 基础 URL
+  - `-o/--output`：报告输出目录
+
+### 📊 Phase 2 完成度
+
+| 模块 | 功能点 | 状态 |
+|------|--------|------|
+| 性能测试 | 负载测试、RPS 控制、阈值告警、报告 | ✅ 100% |
+| 认证增强 | OAuth 2.0 / JWT / API Key / HMAC | ✅ 100% |
+| 断言增强 | JSON Schema / Custom / Database | ✅ 100% |
+| 报告增强 | 历史对比 / 趋势图 / 失败聚合 | ⏳ 待开发 |
 
 ---
 

@@ -1,0 +1,177 @@
+# 认证增强示例 - OAuth 2.0 和 JWT 管理
+# 演示如何使用 AuthManager 处理各种认证场景
+
+name: "认证增强使用示例"
+description: "展示 OAuth 2.0、JWT、API Key 和 HMAC 认证方式"
+
+# ========================================
+# 示例 1: OAuth 2.0 Client Credentials 流程
+# ========================================
+oauth2_client_credentials:
+  description: "使用 Client Credentials 流程获取 token"
+  token_url: "https://auth.example.com/oauth/token"
+  client_id: "your_client_id"
+  client_secret: "your_client_secret"
+  scope: "read write"
+  
+  # 在测试用例中使用
+  test_usage:
+    - name: "访问受保护的资源"
+      method: "GET"
+      endpoint: "/api/protected-resource"
+      auth:
+        type: "oauth2"
+        token_name: "oauth2"
+
+# ========================================
+# 示例 2: OAuth 2.0 Resource Owner Password 流程
+# ========================================
+oauth2_password_flow:
+  description: "使用用户名密码获取 token"
+  token_url: "https://auth.example.com/oauth/token"
+  client_id: "your_client_id"
+  client_secret: "your_client_secret"
+  username: "user@example.com"
+  password: "user_password"
+  scope: "read"
+  
+  # 自动刷新配置
+  auto_refresh: true
+  refresh_before_expiry: 60  # 提前 60 秒刷新
+
+# ========================================
+# 示例 3: JWT Token 创建和验证
+# ========================================
+jwt_example:
+  description: "创建和验证 JWT token"
+  
+  # 创建 JWT
+  create:
+    payload:
+      user_id: 12345
+      role: "admin"
+      permissions: ["read", "write", "delete"]
+    secret_key: "your_secret_key"
+    algorithm: "HS256"
+    expires_in: 3600  # 1 小时
+    issuer: "api-test-agent"
+    audience: "api.example.com"
+  
+  # 在测试用例中使用
+  test_usage:
+    - name: "使用 JWT 访问 API"
+      method: "GET"
+      endpoint: "/api/admin/users"
+      auth:
+        type: "jwt"
+        token_name: "jwt"
+
+# ========================================
+# 示例 4: API Key 认证
+# ========================================
+api_key_example:
+  description: "使用 API Key 进行认证"
+  api_key: "your_api_key_here"
+  key_name: "X-API-Key"
+  key_location: "header"  # header / query / cookie
+  
+  # 在测试用例中使用
+  test_usage:
+    - name: "使用 API Key 访问"
+      method: "GET"
+      endpoint: "/api/data"
+      auth:
+        type: "api_key"
+        api_key: "${API_KEY}"
+        key_name: "X-API-Key"
+        key_location: "header"
+
+# ========================================
+# 示例 5: HMAC 签名认证
+# ========================================
+hmac_example:
+  description: "使用 HMAC 签名进行认证"
+  access_key: "your_access_key"
+  secret_key: "your_secret_key"
+  
+  # 在测试用例中使用
+  test_usage:
+    - name: "使用 HMAC 签名访问"
+      method: "POST"
+      endpoint: "/api/secure-endpoint"
+      auth:
+        type: "hmac"
+        access_key: "${ACCESS_KEY}"
+        secret_key: "${SECRET_KEY}"
+
+# ========================================
+# 示例 6: Basic Auth
+# ========================================
+basic_auth_example:
+  description: "使用 Basic Auth 进行认证"
+  username: "admin"
+  password: "password123"
+  
+  # 在测试用例中使用
+  test_usage:
+    - name: "使用 Basic Auth 访问"
+      method: "GET"
+      endpoint: "/api/admin"
+      auth:
+        type: "basic"
+        username: "${USERNAME}"
+        password: "${PASSWORD}"
+
+# ========================================
+# 示例 7: Bearer Token
+# ========================================
+bearer_token_example:
+  description: "使用 Bearer Token 进行认证"
+  token: "your_bearer_token_here"
+  
+  # 在测试用例中使用
+  test_usage:
+    - name: "使用 Bearer Token 访问"
+      method: "GET"
+      endpoint: "/api/profile"
+      auth:
+        type: "bearer"
+        token: "${BEARER_TOKEN}"
+
+# ========================================
+# Python 代码使用示例
+# ========================================
+python_usage_example: |
+  from api_test_agent import AuthManager, OAuth2Client, JWTManager, TokenInfo
+  
+  # 初始化认证管理器
+  auth_mgr = AuthManager()
+  
+  # 示例 1: OAuth 2.0 Client Credentials
+  token_info = OAuth2Client.client_credentials_flow(
+      token_url="https://auth.example.com/oauth/token",
+      client_id="client_id",
+      client_secret="client_secret",
+      scope="read write",
+      auth_manager=auth_mgr,
+      token_name="my_oauth2"
+  )
+  
+  # 获取认证头
+  headers = auth_mgr.get_auth_headers("my_oauth2")
+  
+  # 示例 2: JWT 创建和解码
+  jwt_token = JWTManager.create_jwt(
+      payload={"user_id": 123, "role": "admin"},
+      secret_key="my_secret",
+      expires_in=3600
+  )
+  
+  # 解码 JWT
+  payload = JWTManager.decode_jwt(jwt_token, "my_secret")
+  
+  # 示例 3: 在测试中使用认证
+  from api_test_agent import TestRunner
+  
+  runner = TestRunner(base_url="https://api.example.com")
+  # 测试用例会使用 auth 配置自动应用认证
