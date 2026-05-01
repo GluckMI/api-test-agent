@@ -280,9 +280,14 @@ class AssertEngine:
         """
         根据路径从嵌套数据结构中获取值
         支持：data['key']、data[0]、data.key 等格式
+        特殊路径：'$' 表示根路径（返回整个数据）
         """
-        if not path or data is None:
+        # 处理根路径或空路径
+        if not path or path == '$':
             return data
+        
+        if data is None:
+            return None
         
         # 解析路径
         parts = re.split(r'\.\s*|\[|\]', path)
