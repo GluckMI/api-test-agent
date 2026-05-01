@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+api_test.log
+
+# Reports (generated)
+reports/*.html
+reports/*.json
+reports/*.md
+
+# Config files with secrets
+config.json
+.env
+
+# Test data (optional sensitive data)
+tests/data/*.csv
+tests/data/*.xlsx
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/

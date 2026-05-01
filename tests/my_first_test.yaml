@@ -1,0 +1,32 @@
+name: "我的第一个 API 测试"
+description: "这是一个超简单的入门示例"
+
+steps:
+  - name: "获取用户信息"
+    method: GET
+    endpoint: "https://jsonplaceholder.typicode.com/users/1"
+    
+    # 断言验证
+    assertions:
+      # 1. 状态码为 200
+      - type: status_code
+        expected: 200
+      
+      # 2. 响应时间小于 3 秒
+      - type: response_time
+        max: 3.0
+      
+      # 3. 包含 name 字段
+      - type: contains_key
+        key: "name"
+        path: "$"
+      
+      # 4. 用户名是字符串
+      - type: type_check
+        path: "name"
+        expected_type: str
+      
+      # 5. 具体值检查
+      - type: equal
+        path: "id"
+        expected: 1

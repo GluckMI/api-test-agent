@@ -1,0 +1,13 @@
+# Code Owners
+
+# 核心维护者负责所有源代码和文档
+* @qwenpaw/team
+
+# Python 核心代码
+*.py @qwenpaw/core-team
+
+# 文档
+*.md @qwenpaw/docs-team
+
+# CI/CD配置
+.github/workflows/ @qwenpaw/devops-team
