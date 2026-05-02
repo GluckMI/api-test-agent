@@ -9,6 +9,28 @@ import socket
 import logging
 from pathlib import Path
 
+
+def setup_logging(verbose: bool = False):
+    """
+    初始化日志系统
+    
+    Args:
+        verbose: 是否启用详细日志（DEBUG 级别）
+    """
+    log_level = logging.DEBUG if verbose else logging.INFO
+    log_format = "%(asctime)s [%(levelname)-7s] %(name)s: %(message)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+    
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        datefmt=date_format,
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,8 +112,17 @@ def main():
     parser.add_argument("--port", type=int, default=8000, help="服务器端口")
     parser.add_argument("--reload", action="store_true", help="启用热重载")
     parser.add_argument("--no-reload", action="store_true", help="禁用热重载")
+    parser.add_argument("-v", "--verbose", action="store_true", 
+                        help="启用详细日志（DEBUG 级别）")
 
     args = parser.parse_args()
+
+    # 初始化日志系统（在所有其他操作之前）
+    setup_logging(verbose=args.verbose)
+    
+    logger.info("Starting API Test Agent GUI Server")
+    if args.verbose:
+        logger.debug("Verbose mode enabled, showing DEBUG level logs")
 
     # 检测端口并自动切换（在打印信息之前）
     final_port = args.port
