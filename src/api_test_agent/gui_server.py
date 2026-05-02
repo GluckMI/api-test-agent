@@ -6,7 +6,10 @@ API Test Agent GUI - 独立启动脚本
 """
 import sys
 import socket
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def is_port_available(host: str, port: int) -> bool:
@@ -15,6 +18,18 @@ def is_port_available(host: str, port: int) -> bool:
     
     注意：不使用 SO_REUSEADDR，因为 Windows 上该选项允许
     多个 socket 绑定同一端口，会导致检测不准确。
+    
+    异常处理策略：
+    - OSError: 端口被占用或权限不足 → 返回 False
+    - socket.timeout: 连接超时 → 返回 False（可能被防火墙拦截）
+    - 其他未知异常: 记录日志并返回 False（保守策略）
+    
+    Args:
+        host: 主机地址（如 '0.0.0.0' 或 '127.0.0.1'）
+        port: 端口号
+        
+    Returns:
+        True 表示端口可用，False 表示不可用或检测失败
     """
     sock = None
     try:
@@ -22,13 +37,21 @@ def is_port_available(host: str, port: int) -> bool:
         sock.settimeout(2)
         sock.bind((host, port))
         return True
-    except OSError:
+    except OSError as e:
+        logger.debug(f"Port {port} on {host} unavailable (OSError): {e}")
         return False
-    except Exception:
+    except socket.timeout as e:
+        logger.warning(f"Port {port} on {host} check timed out: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error checking port {port} on {host}: {type(e).__name__}: {e}")
         return False
     finally:
         if sock:
-            sock.close()
+            try:
+                sock.close()
+            except Exception:
+                pass
 
 
 def find_available_port(host: str, start_port: int = 8000, max_attempts: int = 100) -> int:
