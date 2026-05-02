@@ -12,7 +12,7 @@ import {
   Empty,
 } from 'antd';
 
-const { Title, Paragraph, Text } = Typography;
+const { Text } = Typography;
 
 interface PlannedFeature {
   name: string;
