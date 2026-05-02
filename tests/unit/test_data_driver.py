@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from data_driver import (
+from api_test_agent.data_driver import (
     DataSourceConfig,
     DataDriver,
     TemplateExpander,

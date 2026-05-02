@@ -68,3 +68,16 @@ test_hooks.log
 .coverage
 htmlcov/
 .pytest_cache/
+
+# GUI Runtime Data (generated)
+gui_data/
+
+# Screenshots (temporary)
+screenshot*.png
+
+# Frontend build output (should be rebuilt with `npm run build`)
+# Note: Keep this commented if you want to include dist in repo for deployment convenience
+# frontend/dist/
+
+# Node modules (handled by frontend/.gitignore, but added here for safety)
+node_modules/

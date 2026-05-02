@@ -8,22 +8,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Phase 2 性能测试模块（perf_collector + perf_tester）
-- Phase 2 认证增强模块（OAuth 2.0 / JWT / API Key / HMAC）
-- Phase 2 断言增强（JSON Schema / Custom / Database）
-- CLI perf 子命令
-- 性能测试使用示例和文档
-- 认证增强示例和文档
-- 断言增强示例和文档
-- PyJWT 依赖支持
-- 项目计划、技术分析和扩展路线图文档
-- GitHub Actions CI/CD工作流配置
-- Issue 和 Pull Request 模板
-- CONTRIBUTING.md 贡献指南
+- Phase 3 GUI 可视化编辑器（FastAPI + React）
+- GUI 后端 RESTful API（项目/测试/环境/执行/报告管理）
+- WebSocket 实时测试执行日志推送
+- React 前端界面（Ant Design 6 + TypeScript）
+- 测试用例可视化编辑器（表单模式 + Monaco Editor YAML 模式）
+- Dashboard 仪表盘（统计图表、执行历史）
+- 实时执行控制台（WebSocket 日志流、进度展示）
+- 环境管理器（多环境配置可视化管理）
+- 报告中心（报告列表、详情查看、图表分析）
+- CLI `gui start` 子命令
+- Mock 服务管理模块（基础框架）
 
 ### Changed
-- README.md 优化为符合 GitHub 规范的格式
-- 分离代码与管理文档到独立目录
+- README.md 更新为 v3.0.0-alpha 版本
+- 使用教程.md 新增 GUI 可视化编辑器章节
+- CHEATSHEET.md 新增 GUI 相关命令
+
+---
+
+## [3.0.0-alpha] - 2026-05-01
+
+### 🎉 New Features - Phase 3 GUI 编辑器
+
+#### 🖥️ GUI 后端（FastAPI）
+- **RESTful API 服务**：
+  - 项目管理 API (`/api/projects`) - CRUD 操作
+  - 测试用例 API (`/api/tests`) - 创建/编辑/删除/查询
+  - 环境管理 API (`/api/environments`) - 多环境配置
+  - 执行引擎 API (`/api/execution/run`) - 异步测试执行
+  - 报告管理 API (`/api/reports`) - 报告查询与详情
+  - Mock 服务 API (`/api/mock`) - Mock 配置管理
+- **WebSocket 服务**：
+  - 实时执行日志推送 (`/ws/execution/{id}`)
+  - 连接管理与心跳检测
+  - 广播消息支持
+- **服务层架构**：
+  - `project_service.py` - 项目数据管理
+  - `test_service.py` - 测试用例 CRUD
+  - `execution_service.py` - 测试执行调度
+  - `report_service.py` - 报告生成与查询
+  - `environment_service.py` - 环境配置管理
+- **数据模型**：
+  - Pydantic V2 模型定义（Project, TestCase, Report 等）
+  - JSON 文件持久化存储
+
+#### 🎨 前端界面（React + TypeScript）
+- **技术栈**：
+  - React 19 + TypeScript 6
+  - Ant Design 6 组件库
+  - ECharts 图表库
+  - Monaco Editor 代码编辑器
+  - Zustand 状态管理
+  - React Router 7 路由
+  - Axios HTTP 客户端
+- **页面模块**：
+  - Dashboard 仪表盘 (`/`)
+  - 项目列表 (`/projects`)
+  - 测试用例列表 (`/tests/:projectId`)
+  - 测试用例编辑器 (`/tests/:projectId/:testId/edit`)
+  - 执行控制台 (`/execution/:executionId`)
+  - 报告列表 (`/reports`)
+  - 报告详情 (`/reports/:reportId`)
+  - 环境管理器 (`/environments`)
+  - Mock 管理器 (`/mock`)
+- **核心功能**：
+  - 表单式步骤配置（零编码）
+  - YAML 源码编辑（Monaco Editor）
+  - WebSocket 实时日志
+  - 响应式布局设计
+
+#### 🔧 CLI 增强
+- **gui 子命令**：
+  ```bash
+  python api_test_agent.py gui start           # 启动 GUI（默认端口 8000+3000）
+  python api_test_agent.py gui start --port 9000  # 自定义端口
+  python api_test_agent.py gui start --no-reload   # 生产模式
+  ```
 
 ---
 

@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from environment import EnvironmentConfig, EnvironmentManager
+from api_test_agent.environment import EnvironmentConfig, EnvironmentManager
 
 
 class TestEnvironmentConfig:

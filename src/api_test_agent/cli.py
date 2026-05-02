@@ -108,6 +108,21 @@ def main():
     perf_parser.add_argument('--base-url', help='API 基础 URL（覆盖配置）')
     perf_parser.add_argument('-o', '--output', default='reports',
                             help='报告输出目录 (默认：reports)')
+
+    # gui 子命令 (Phase 3)
+    gui_parser = subparsers.add_parser('gui', help='启动 GUI 编辑器')
+    gui_subparsers = gui_parser.add_subparsers(dest='gui_command', help='GUI 操作')
+    
+    # gui start 命令
+    gui_start_parser = gui_subparsers.add_parser('start', help='启动 GUI 服务器')
+    gui_start_parser.add_argument('--host', default='0.0.0.0',
+                                 help='服务器地址 (默认：0.0.0.0)')
+    gui_start_parser.add_argument('--port', type=int, default=8000,
+                                 help='服务器端口 (默认：8000)')
+    gui_start_parser.add_argument('--reload', action='store_true',
+                                 help='启用热重载 (开发模式)')
+    gui_start_parser.add_argument('--no-reload', action='store_true',
+                                 help='禁用热重载 (生产模式)')
     
     args = parser.parse_args()
     
@@ -119,6 +134,8 @@ def main():
         handle_env_command(args)
     elif args.command == 'perf':
         run_perf_test(args)
+    elif args.command == 'gui':
+        start_gui_server(args)
     else:
         parser.print_help()
 
@@ -394,7 +411,7 @@ def _run_concurrent_tests(runner: TestRunner, directory: str, workers: int) -> T
         TestSuiteResult 测试结果
     """
     try:
-        from .concurrent import ConcurrentTestRunner
+        from .concurrent_runner import ConcurrentTestRunner
         from .runner import TestSuiteResult
     except ImportError as e:
         print_warning(f"并发模块不可用，回退到串行模式: {e}")
@@ -649,6 +666,61 @@ def run_perf_test(args):
         sys.exit(130)
     except Exception as e:
         print_error(f"性能测试执行失败: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+def start_gui_server(args):
+    """启动 GUI 服务器"""
+    import subprocess
+    import uvicorn
+
+    host = args.host
+    port = args.port
+
+    reload = False
+    if args.reload:
+        reload = True
+    elif not args.no_reload:
+        reload = True
+
+    print_banner("🌐 API Test Agent GUI")
+    print_info(f"服务器地址: http://{host}:{port}")
+    print_info(f"API 文档: http://{host}:{port}/api/docs")
+    print_info(f"热重载: {'启用' if reload else '禁用'}")
+    print()
+
+    try:
+        # 使用独立的 GUI 服务器脚本启动（解决 Windows 下热重载问题）
+        gui_server_script = Path(__file__).parent / "gui_server.py"
+
+        cmd = [sys.executable, str(gui_server_script),
+               "--host", host,
+               "--port", str(port)]
+
+        if reload:
+            cmd.append("--reload")
+        else:
+            cmd.append("--no-reload")
+
+        subprocess.run(cmd, check=True)
+
+    except KeyboardInterrupt:
+        print("\n服务器已停止")
+    except FileNotFoundError:
+        # 回退到直接 uvicorn 启动（无热重载）
+        print_warning("GUI 服务器脚本未找到，回退到直接启动模式（无热重载）")
+        from api_test_agent.gui import app
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            reload=False,
+            log_level="info",
+        )
+    except Exception as e:
+        print_error(f"启动服务器失败: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

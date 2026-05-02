@@ -23,7 +23,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from hook_engine import (
+from api_test_agent.hooks import (
     HookEngine,
     HookType,
     HookConfig,

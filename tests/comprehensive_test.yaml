@@ -1,0 +1,118 @@
+name: "综合功能测试"
+description: "测试多种断言类型和功能"
+
+steps:
+  - name: "GET 请求 - 获取用户列表"
+    method: GET
+    endpoint: "https://jsonplaceholder.typicode.com/users"
+    
+    assertions:
+      - type: status_code
+        expected: 200
+      
+      - type: response_time
+        max: 5.0
+      
+      - type: type_check
+        path: "$"
+        expected_type: list
+      
+      - type: length
+        path: "$"
+        expected: 10
+      
+      - type: contains_key
+        path: "$[0]"
+        key: "id"
+      
+      - type: contains_key
+        path: "$[0]"
+        key: "name"
+      
+      - type: contains_key
+        path: "$[0]"
+        key: "email"
+      
+      - type: equal
+        path: "$[0].id"
+        expected: 1
+      
+      - type: is_not_none
+        path: "$[0].name"
+
+  - name: "GET 请求 - 获取单个用户"
+    method: GET
+    endpoint: "https://jsonplaceholder.typicode.com/users/1"
+    
+    extract:
+      user_name: "name"
+      user_email: "email"
+    
+    assertions:
+      - type: status_code
+        expected: 200
+      
+      - type: json_schema
+        name: "验证用户对象结构"
+        schema:
+          type: "object"
+          required: ["id", "name", "email", "address"]
+          properties:
+            id:
+              type: "integer"
+            name:
+              type: "string"
+            email:
+              type: "string"
+            address:
+              type: "object"
+              required: ["street", "city"]
+              properties:
+                street:
+                  type: "string"
+                city:
+                  type: "string"
+      
+      - type: type_check
+        path: "id"
+        expected_type: int
+      
+      - type: type_check
+        path: "name"
+        expected_type: str
+      
+      - type: regex_match
+        path: "email"
+        pattern: "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$"
+
+  - name: "POST 请求 - 创建资源"
+    method: POST
+    endpoint: "https://jsonplaceholder.typicode.com/posts"
+    json:
+      title: "测试标题"
+      body: "测试内容"
+      userId: 1
+    
+    assertions:
+      - type: status_code
+        expected: 201
+      
+      - type: contains_key
+        path: "$"
+        key: "id"
+      
+      - type: equal
+        path: "title"
+        expected: "测试标题"
+      
+      - type: equal
+        path: "userId"
+        expected: 1
+
+  - name: "GET 请求 - 测试失败断言"
+    method: GET
+    endpoint: "https://jsonplaceholder.typicode.com/invalid-endpoint"
+    
+    assertions:
+      - type: status_code
+        expected: 200

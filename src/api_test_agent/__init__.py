@@ -31,7 +31,7 @@ from .reports import ReportGenerator
 from .environment import EnvironmentManager, EnvironmentConfig
 from .hooks import HookEngine, HookType, HookConfig, HookResult
 from .data_driver import DataDriver, DataSourceConfig, TemplateExpander
-from .concurrent import ConcurrentTestRunner, ConcurrencyResult, VariableContext
+from .concurrent_runner import ConcurrentTestRunner, ConcurrencyResult, VariableContext
 
 # Phase 2 新增模块
 from .perf_collector import (

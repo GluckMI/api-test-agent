@@ -95,6 +95,14 @@ class AssertEngine:
     @staticmethod
     def contains(container: Any, item: Any, name: str = "包含检查") -> AssertionResult:
         """检查容器是否包含某项"""
+        if container is None:
+            return AssertionResult(
+                name=name,
+                passed=False,
+                message=f"容器为 None，无法检查是否包含 {item}",
+                expected=item,
+                actual=None
+            )
         try:
             passed = item in container
         except TypeError:
@@ -111,6 +119,14 @@ class AssertEngine:
     @staticmethod
     def not_contains(container: Any, item: Any, name: str = "不包含检查") -> AssertionResult:
         """检查容器是否不包含某项"""
+        if container is None:
+            return AssertionResult(
+                name=name,
+                passed=True,
+                message=f"容器为 None，不包含 {item}",
+                expected=f"!({item})",
+                actual=None
+            )
         try:
             passed = item not in container
         except TypeError:
@@ -127,6 +143,14 @@ class AssertEngine:
     @staticmethod
     def contains_key(container: Dict, key: str, name: str = "键检查") -> AssertionResult:
         """检查字典是否包含某个键"""
+        if container is None:
+            return AssertionResult(
+                name=name,
+                passed=False,
+                message=f"容器为 None，无法检查是否包含键 '{key}'",
+                expected=key,
+                actual=None
+            )
         passed = key in container
         return AssertionResult(
             name=name,
@@ -505,6 +529,12 @@ class AssertEngine:
                 value = cls._get_value_by_path(response.body, assertion.get("path"))
                 value = str(value) if value else ""
                 result = cls.regex_match(value, assertion.get("pattern"), assertion.get("name", "正则检查"))
+            elif assert_type == "is_not_none":
+                value = cls._get_value_by_path(response.body, assertion.get("path"))
+                result = cls.is_not_none(value, assertion.get("name", "非空检查"))
+            elif assert_type == "is_none":
+                value = cls._get_value_by_path(response.body, assertion.get("path"))
+                result = cls.is_none(value, assertion.get("name", "空值检查"))
             # 响应相关断言
             elif assert_type == "status_code":
                 result = cls.status_code(response, assertion.get("expected"), assertion.get("name", "状态码检查"))
@@ -611,6 +641,9 @@ class AssertEngine:
         
         current = data
         for part in parts:
+            # '$' 表示从根路径开始，跳过
+            if part == '$':
+                continue
             if isinstance(current, dict):
                 current = current.get(part)
             elif isinstance(current, (list, tuple)):

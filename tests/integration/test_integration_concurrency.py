@@ -23,8 +23,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from concurrent_runner import ConcurrentTestRunner, ConcurrencyResult, VariableContext
-from test_runner import TestRunner, TestCaseResult
+from api_test_agent.concurrent_runner import ConcurrentTestRunner, ConcurrencyResult, VariableContext
+from api_test_agent.runner import TestRunner, TestCaseResult
 
 
 class TestConcurrencyBasicExecution:

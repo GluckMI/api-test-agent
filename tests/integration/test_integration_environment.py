@@ -20,7 +20,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from environment import EnvironmentManager, EnvironmentConfig
+from api_test_agent.environment import EnvironmentManager, EnvironmentConfig
 
 
 class TestEnvironmentIntegration:

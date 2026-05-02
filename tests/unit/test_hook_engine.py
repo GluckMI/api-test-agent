@@ -9,7 +9,7 @@ import json
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
-from hook_engine import (
+from api_test_agent.hooks import (
     HookEngine,
     HookConfig,
     HookResult,
@@ -19,7 +19,7 @@ from hook_engine import (
     ScriptHookExecutor,
     BaseHookExecutor
 )
-from api_client import APIResponse
+from api_test_agent.client import APIResponse
 
 
 class TestHookDataStructures:

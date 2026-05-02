@@ -3,12 +3,53 @@
 ## 📌 最常用命令
 
 ```bash
-# 运行测试
+# 运行测试（CLI 模式）
 python api_test_agent.py run <test.yaml|tests/> --reports html,json
+
+# 启动 GUI 编辑器（v3.0 新增）
+python api_test_agent.py gui start
 
 # 示例
 python api_test_agent.py run tests/my_test.yaml --reports html
 ```
+
+---
+
+## 🖥️ GUI 快速启动 (v3.0)
+
+```bash
+# 1. 安装依赖
+pip install fastapi uvicorn websockets pydantic-settings
+cd frontend && npm install && cd ..
+
+# 2. 启动服务
+python api_test_agent.py gui start
+
+# 3. 访问地址
+# 前端: http://localhost:3000
+# API 文档: http://localhost:8000/docs
+```
+
+### GUI CLI 选项
+
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `--host` | 服务器地址 | `0.0.0.0` |
+| `--port` | 后端端口 | `8000` |
+| `--reload` | 启用热重载 | 开发模式 |
+| `--no-reload` | 禁用热重载 | 生产模式 |
+
+### GUI 功能速查
+
+| 功能 | 路径 | 说明 |
+|------|------|------|
+| Dashboard | `/` | 统计仪表盘 |
+| 项目管理 | `/projects` | 项目 CRUD |
+| 测试列表 | `/tests/:id` | 用例列表 |
+| 测试编辑 | `/tests/:id/:testId/edit` | 可视化编辑器 |
+| 执行控制台 | `/execution/:id` | 实时日志 |
+| 报告中心 | `/reports` | 报告查看 |
+| 环境管理 | `/environments` | 环境配置 |
 
 ---
 
@@ -133,11 +174,22 @@ runner.close()
 
 ```
 api-test-agent/
-├── *.py              # 核心代码
-├── tests/            # 你的测试用例
-├── examples/         # 示例测试
-├── reports/          # 生成的报告
-└── README.md         # 文档
+├── src/api_test_agent/gui/   # GUI 后端 (v3.0)
+│   ├── models/               # 数据模型
+│   ├── routes/               # API 路由
+│   ├── services/             # 业务逻辑
+│   └── websocket/            # WebSocket 服务
+├── frontend/                 # 前端界面 (v3.0)
+│   ├── src/
+│   │   ├── api/              # API 客户端
+│   │   ├── pages/            # 页面组件
+│   │   ├── layouts/          # 布局组件
+│   │   └── types/            # TypeScript 类型
+├── *.py                      # 核心代码
+├── tests/                    # 你的测试用例
+├── examples/                 # 示例测试
+├── reports/                  # 生成的报告
+└── README.md                 # 文档
 ```
 
 ---
@@ -160,11 +212,11 @@ api-test-agent/
 
 ## 🔗 相关文档
 
-- `快速开始.md` - 入门指南
-- `使用教程.md` - 完整教程
-- `SKILL.md` - 详细使用说明
+- `使用教程.md` - 完整教程（含 GUI 章节）
 - `README.md` - 项目简介
+- `CHANGELOG.md` - 版本变更记录
+- `docs/Phase2_新功能使用指南.md` - Phase 2 功能指南
 
 ---
 
-*最后更新：2026-05-01*
+*最后更新：2026-05-01 (v3.0.0-alpha)*

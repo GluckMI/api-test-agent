@@ -10,12 +10,12 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from concurrent_runner import (
+from api_test_agent.concurrent_runner import (
     ConcurrentTestRunner,
     ConcurrencyResult,
     VariableContext,
 )
-from test_runner import TestRunner, TestCaseResult
+from api_test_agent.runner import TestRunner, TestCaseResult
 
 
 @pytest.fixture

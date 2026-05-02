@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from data_driver import DataDriver, DataSourceConfig, TemplateExpander, TestCase
+from api_test_agent.data_driver import DataDriver, DataSourceConfig, TemplateExpander, TestCase
 
 
 class TestCSVDataLoading:
