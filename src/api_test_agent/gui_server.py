@@ -12,19 +12,17 @@ from pathlib import Path
 
 def setup_logging(verbose: bool = False):
     """
-    初始化日志系统
+    初始化日志系统（与项目 runner.py 保持一致的格式）
     
     Args:
         verbose: 是否启用详细日志（DEBUG 级别）
     """
     log_level = logging.DEBUG if verbose else logging.INFO
-    log_format = "%(asctime)s [%(levelname)-7s] %(name)s: %(message)s"
-    date_format = "%Y-%m-%d %H:%M:%S"
+    log_format = "%(asctime)s - %(levelname)s - %(message)s"
     
     logging.basicConfig(
         level=log_level,
         format=log_format,
-        datefmt=date_format,
         handlers=[
             logging.StreamHandler(sys.stdout)
         ]
