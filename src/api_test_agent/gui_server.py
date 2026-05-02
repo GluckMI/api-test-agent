@@ -7,6 +7,7 @@ API Test Agent GUI - 独立启动脚本
 import sys
 import socket
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
@@ -20,13 +21,27 @@ def setup_logging(verbose: bool = False):
     log_level = logging.DEBUG if verbose else logging.INFO
     log_format = "%(asctime)s - %(levelname)s - %(message)s"
     
-    logging.basicConfig(
-        level=log_level,
-        format=log_format,
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
+    logs_dir = Path.cwd() / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_file = logs_dir / "api_test_agent.log"
+    
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    formatter = logging.Formatter(log_format)
+    
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    root_logger.addHandler(stream_handler)
+    
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,  # 10MB per file
+        backupCount=5,
+        encoding="utf-8",
     )
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
 
 
 logger = logging.getLogger(__name__)

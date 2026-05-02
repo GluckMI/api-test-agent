@@ -12,6 +12,10 @@ import shutil
 
 from ..config import settings
 from ..models.project import Project, ProjectCreate, ProjectUpdate
+from ..utils.validation import (
+    validate_project_id,
+    validate_path_is_safe,
+)
 
 
 def _ensure_dirs():
@@ -21,7 +25,10 @@ def _ensure_dirs():
 
 def _get_project_file(project_id: str) -> Path:
     """获取项目文件路径"""
-    return Path(settings.projects_dir) / f"{project_id}.json"
+    validate_project_id(project_id)
+    file_path = Path(settings.projects_dir) / f"{project_id}.json"
+    validate_path_is_safe(settings.projects_dir, str(file_path))
+    return file_path
 
 
 def _read_project(project_id: str) -> Optional[Dict[str, Any]]:
@@ -48,6 +55,7 @@ def list_projects() -> List[Project]:
     
     for file in projects_dir.glob("*.json"):
         try:
+            validate_path_is_safe(settings.projects_dir, str(file))
             with open(file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 projects.append(Project(**data))
@@ -80,6 +88,7 @@ def create_project(project_data: ProjectCreate) -> Project:
     
     # 创建项目目录结构
     project_dir = Path(settings.projects_dir) / project_id
+    validate_path_is_safe(settings.projects_dir, str(project_dir))
     project_dir.mkdir(exist_ok=True)
     (project_dir / "tests").mkdir(exist_ok=True)
     (project_dir / "reports").mkdir(exist_ok=True)
@@ -123,6 +132,7 @@ def delete_project(project_id: str) -> bool:
     
     # 删除项目目录
     project_dir = Path(settings.projects_dir) / project_id
+    validate_path_is_safe(settings.projects_dir, str(project_dir))
     if project_dir.exists():
         shutil.rmtree(project_dir)
     

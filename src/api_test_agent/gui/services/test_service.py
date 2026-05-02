@@ -15,6 +15,13 @@ from ..models.test import (
     TestCase, TestCaseCreate, TestCaseUpdate, 
     TestCaseYAML, TestStepConfig, AssertionConfig
 )
+from ..utils.validation import (
+    validate_test_id,
+    validate_yaml_size,
+    validate_yaml_file_size,
+    validate_path_is_safe,
+    YAML_MAX_SIZE,
+)
 
 
 def _ensure_dirs():
@@ -24,7 +31,10 @@ def _ensure_dirs():
 
 def _get_test_file(test_id: str) -> Path:
     """获取测试用例文件路径"""
-    return Path(settings.tests_dir) / f"{test_id}.yaml"
+    validate_test_id(test_id)
+    file_path = Path(settings.tests_dir) / f"{test_id}.yaml"
+    validate_path_is_safe(settings.tests_dir, str(file_path))
+    return file_path
 
 
 def _test_to_yaml(test_data: Dict[str, Any]) -> str:
@@ -67,6 +77,7 @@ def _test_to_yaml(test_data: Dict[str, Any]) -> str:
 
 def _yaml_to_test(yaml_content: str) -> Dict[str, Any]:
     """将 YAML 格式转换为测试数据"""
+    validate_yaml_size(yaml_content)
     data = yaml.safe_load(yaml_content)
     if not data:
         return {}
@@ -103,6 +114,8 @@ def list_tests(project_id: Optional[str] = None) -> List[TestCase]:
     
     for file in tests_dir.glob("*.yaml"):
         try:
+            validate_path_is_safe(settings.tests_dir, str(file))
+            validate_yaml_file_size(file)
             with open(file, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f)
                 if data:
@@ -170,6 +183,7 @@ def get_test(test_id: str) -> Optional[TestCase]:
     if not file_path.exists():
         return None
     
+    validate_yaml_file_size(file_path)
     with open(file_path, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
         if not data:
@@ -210,6 +224,7 @@ def update_test(test_id: str, test_data: TestCaseUpdate) -> Optional[TestCase]:
     if not file_path.exists():
         return None
     
+    validate_yaml_file_size(file_path)
     with open(file_path, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
         if not data:
@@ -250,6 +265,7 @@ def get_test_yaml(test_id: str) -> Optional[TestCaseYAML]:
     if not file_path.exists():
         return None
     
+    validate_yaml_file_size(file_path)
     with open(file_path, 'r', encoding='utf-8') as f:
         yaml_content = f.read()
     

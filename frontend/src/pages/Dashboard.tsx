@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Row, Col, Card, Statistic, Table, Tag } from 'antd';
 import {
   FileTextOutlined,
@@ -11,6 +11,21 @@ import { useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
 
+interface StatCardProps {
+  title: string;
+  value: number;
+  prefix?: React.ReactNode;
+  suffix?: string | React.ReactNode;
+  precision?: number;
+  valueStyle?: React.CSSProperties;
+}
+
+const StatCard = React.memo<StatCardProps>(({ title, value, prefix, suffix, precision, valueStyle }) => (
+  <Card>
+    <Statistic title={title} value={value} prefix={prefix} suffix={suffix} precision={precision} valueStyle={valueStyle} />
+  </Card>
+));
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
@@ -22,11 +37,7 @@ const Dashboard: React.FC = () => {
   const [reports, setReports] = useState<any[]>([]);
   const [trendData, setTrendData] = useState<any[]>([]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [projects, tests, reportStats, recentReports] = await Promise.all([
         projectApi.list(),
@@ -45,9 +56,13 @@ const Dashboard: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
-  const chartOption = {
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const chartOption = useMemo(() => ({
     tooltip: { trigger: 'axis' as const },
     xAxis: {
       type: 'category' as const,
@@ -63,9 +78,9 @@ const Dashboard: React.FC = () => {
       itemStyle: { color: '#1890ff' },
     }],
     grid: { left: 50, right: 20, top: 30, bottom: 30 },
-  };
+  }), [trendData]);
 
-  const columns = [
+  const columns = useMemo(() => [
     { title: '测试名称', dataIndex: 'test_name', key: 'test_name' },
     {
       title: '状态',
@@ -100,31 +115,26 @@ const Dashboard: React.FC = () => {
         <a onClick={() => navigate(`/reports/${record.id}`)}>查看详情</a>
       ),
     },
-  ];
+  ], [navigate]);
+
+  const passRateStyle = useMemo<React.CSSProperties>(() => ({
+    color: stats.passRate >= 80 ? '#3f8600' : stats.passRate >= 50 ? '#faad14' : '#cf1322',
+  }), [stats.passRate]);
 
   return (
     <div>
       <Row gutter={[16, 16]}>
         <Col span={6}>
-          <Card>
-            <Statistic title="项目数量" value={stats.totalProjects} prefix={<FileTextOutlined />} />
-          </Card>
+          <StatCard title="项目数量" value={stats.totalProjects} prefix={<FileTextOutlined />} />
         </Col>
         <Col span={6}>
-          <Card>
-            <Statistic title="测试用例" value={stats.totalTests} prefix={<FileTextOutlined />} />
-          </Card>
+          <StatCard title="测试用例" value={stats.totalTests} prefix={<FileTextOutlined />} />
         </Col>
         <Col span={6}>
-          <Card>
-            <Statistic title="平均通过率" value={stats.passRate} suffix="%" precision={1}
-              valueStyle={{ color: stats.passRate >= 80 ? '#3f8600' : stats.passRate >= 50 ? '#faad14' : '#cf1322' }} />
-          </Card>
+          <StatCard title="平均通过率" value={stats.passRate} suffix="%" precision={1} valueStyle={passRateStyle} />
         </Col>
         <Col span={6}>
-          <Card>
-            <Statistic title="执行次数" value={stats.totalReports} prefix={<RocketOutlined />} />
-          </Card>
+          <StatCard title="执行次数" value={stats.totalReports} prefix={<RocketOutlined />} />
         </Col>
       </Row>
 

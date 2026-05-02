@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from ..models.test import TestCase, TestCaseCreate, TestCaseUpdate, TestCaseYAML
 from ..services import test_service
+from ..utils.validation import validate_test_id, validate_yaml_size
 
 router = APIRouter()
 
@@ -28,6 +29,10 @@ async def create_test(test: TestCaseCreate):
 @router.get("/{test_id}", response_model=TestCase)
 async def get_test(test_id: str):
     """获取测试用例详情"""
+    try:
+        validate_test_id(test_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     test = test_service.get_test(test_id)
     if not test:
         raise HTTPException(status_code=404, detail="测试用例不存在")
@@ -37,6 +42,10 @@ async def get_test(test_id: str):
 @router.put("/{test_id}", response_model=TestCase)
 async def update_test(test_id: str, test: TestCaseUpdate):
     """更新测试用例"""
+    try:
+        validate_test_id(test_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     updated = test_service.update_test(test_id, test)
     if not updated:
         raise HTTPException(status_code=404, detail="测试用例不存在")
@@ -46,6 +55,10 @@ async def update_test(test_id: str, test: TestCaseUpdate):
 @router.delete("/{test_id}", status_code=204)
 async def delete_test(test_id: str):
     """删除测试用例"""
+    try:
+        validate_test_id(test_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     success = test_service.delete_test(test_id)
     if not success:
         raise HTTPException(status_code=404, detail="测试用例不存在")
@@ -54,6 +67,10 @@ async def delete_test(test_id: str):
 @router.get("/{test_id}/yaml", response_model=TestCaseYAML)
 async def get_test_yaml(test_id: str):
     """获取测试用例 YAML 格式"""
+    try:
+        validate_test_id(test_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     yaml_content = test_service.get_test_yaml(test_id)
     if not yaml_content:
         raise HTTPException(status_code=404, detail="测试用例不存在")
@@ -67,7 +84,14 @@ async def create_test_from_yaml(yaml_data: dict):
     project_id = yaml_data.get("project_id")
     
     try:
+        validate_yaml_size(yaml_content)
+    except ValueError as e:
+        raise HTTPException(status_code=413, detail=str(e))
+    
+    try:
         test = test_service.create_test_from_yaml(yaml_content, project_id)
         return test
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"YAML 解析失败: {str(e)}")

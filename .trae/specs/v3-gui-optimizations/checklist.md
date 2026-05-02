@@ -1,0 +1,17 @@
+- [x] Task 1: 版本号统一 - `__init__.py` 和 `gui/config.py` 均显示 v3.0.0-alpha
+- [x] Task 2: 异步修复 - `run_in_executor` 已实现，ThreadPoolExecutor(max_workers=4) 已配置
+- [x] Task 3: 内存清理 - OrderedDict + FIFO 清理策略（500条上限）已实现
+- [x] Task 3: WebSocket 清理 - MAX_CONNECTIONS_PER_EXECUTION=100 + cleanup_stale_connections() 已实现
+- [x] Task 4: YAML 安全 - yaml.safe_load() 验证通过，validate_yaml_size() 10MB 限制已实现
+- [x] Task 4: 路径遍历 - validate_path_traversal() 和 validate_path_is_safe() 已实现
+- [x] Task 4: 限流 - RateLimitMiddleware 滑动窗口算法（执行10/min，CRUD 30/min）已注册
+- [x] Task 5: React.memo - TestCaseList、Dashboard、ExecutionConsole 已添加 React.memo/useMemo/useCallback
+- [x] Task 5: 虚拟滚动 - TestCaseList 已添加分页（pageSize=20），ExecutionConsole 日志上限 1000 条
+- [x] Task 6: 日志轮转 - RotatingFileHandler（10MB × 5 备份）已配置到 logs/api_test_agent.log
+- [x] Task 7: 健康检查 - /health 返回 memory + disk + websocket_connections 信息
+- [x] Task 8: CORS 限制 - allowed_origins 支持环境变量 ALLOWED_ORIGINS 配置
+- [x] Task 9: MockManager - 页面显示"开发中"状态、功能预览和开发时间线
+- [ ] 所有改动 - Git commit 和 push 到 origin/main
+- [ ] 所有改动 - 运行 `python api_test_agent.py gui start --no-reload` 启动成功
+- [ ] 所有改动 - 前端 `npm run build` 构建成功
+- [ ] 所有改动 - 无明显回归错误（核心功能正常）

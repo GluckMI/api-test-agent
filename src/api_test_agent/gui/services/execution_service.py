@@ -6,14 +6,20 @@ API Test Agent GUI - 测试执行服务
 from typing import Dict, Any, Optional, List, Callable
 import asyncio
 import uuid
+import logging
 from datetime import datetime
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from collections import OrderedDict
+import threading
 import yaml
 import json
 
 from ...runner import TestRunner, TestCaseResult, TestSuiteResult
 from ..config import settings
 from .test_service import get_test, _get_test_file
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionState:
@@ -60,9 +66,13 @@ class ExecutionRecord:
 class ExecutionService:
     """测试执行服务"""
     
+    MAX_EXECUTION_RECORDS = 500
+    
     def __init__(self):
-        self._executions: Dict[str, ExecutionRecord] = {}
+        self._executions: OrderedDict[str, ExecutionRecord] = OrderedDict()
         self._callbacks: Dict[str, List[Callable]] = {}
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="test-runner")
+        self._lock = threading.Lock()
     
     def get_execution(self, execution_id: str) -> Optional[ExecutionRecord]:
         """获取执行记录"""
@@ -87,7 +97,10 @@ class ExecutionService:
         """
         execution_id = str(uuid.uuid4())
         record = ExecutionRecord(execution_id, test_id)
-        self._executions[execution_id] = record
+        
+        with self._lock:
+            self._executions[execution_id] = record
+            self._cleanup_old_records()
         
         test = get_test(test_id)
         if not test:
@@ -120,48 +133,27 @@ class ExecutionService:
         record.status = ExecutionState.RUNNING
         record.start_time = datetime.now()
         
-        # 执行测试
+        # 使用线程池执行同步的 TestRunner，避免阻塞事件循环
+        loop = asyncio.get_event_loop()
         try:
-            runner = TestRunner()
-            
-            # 执行测试用例
-            result = runner.execute_test_case(test_config)
-            
-            record.current_step = record.total_steps
-            record.progress = 100.0
-            record.end_time = datetime.now()
-            
-            # 转换结果为字典
-            record.result = {
-                "name": result.name,
-                "description": result.description,
-                "passed": result.passed,
-                "total_steps": result.total_steps,
-                "passed_steps": result.passed_steps,
-                "failed_steps": result.failed_steps,
-                "step_results": result.step_results,
-                "total_time": result.total_time,
-                "error_message": result.error_message,
-            }
-            
-            record.status = ExecutionState.PASSED if result.passed else ExecutionState.FAILED
-            
-            # 保存报告
-            await self._save_report(execution_id, test_id, record.result)
-            
-            # 调用进度回调
-            if on_progress:
-                on_progress(record.to_dict())
-            
-            runner.close()
-            
+            result = await loop.run_in_executor(
+                self._executor,
+                self._run_test_sync,
+                test_config,
+                record,
+                execution_id,
+                test_id,
+                on_progress,
+            )
         except Exception as e:
             record.status = ExecutionState.ERROR
             record.error = str(e)
             record.end_time = datetime.now()
             record.logs.append(f"执行错误: {str(e)}")
+            logger.error(f"执行测试失败: {e}")
+            result = record.to_dict()
         
-        return record.to_dict()
+        return result
     
     async def run_tests_batch(self, test_ids: List[str], env_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -189,8 +181,8 @@ class ExecutionService:
             "results": results,
         }
     
-    async def _save_report(self, execution_id: str, test_id: str, result: Dict[str, Any]):
-        """保存执行报告"""
+    def _save_report_sync(self, execution_id: str, test_id: str, result: Dict[str, Any]):
+        """同步保存执行报告（用于线程池内调用）"""
         reports_dir = Path(settings.reports_dir)
         reports_dir.mkdir(parents=True, exist_ok=True)
         
@@ -215,6 +207,13 @@ class ExecutionService:
         with open(report_file, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, ensure_ascii=False, indent=2)
     
+    async def _save_report(self, execution_id: str, test_id: str, result: Dict[str, Any]):
+        """异步保存执行报告（调用同步版本）"""
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None, self._save_report_sync, execution_id, test_id, result
+        )
+    
     def stop_execution(self, execution_id: str) -> bool:
         """停止执行（占位实现）"""
         record = self._executions.get(execution_id)
@@ -223,6 +222,72 @@ class ExecutionService:
             record.end_time = datetime.now()
             return True
         return False
+    
+    def _run_test_sync(self, test_config: Dict[str, Any], record: ExecutionRecord,
+                       execution_id: str, test_id: str,
+                       on_progress: Optional[Callable]) -> Dict[str, Any]:
+        """在线程池中同步执行测试"""
+        runner = TestRunner()
+        try:
+            result = runner.execute_test_case(test_config)
+            
+            record.current_step = record.total_steps
+            record.progress = 100.0
+            record.end_time = datetime.now()
+            
+            record.result = {
+                "name": result.name,
+                "description": result.description,
+                "passed": result.passed,
+                "total_steps": result.total_steps,
+                "passed_steps": result.passed_steps,
+                "failed_steps": result.failed_steps,
+                "step_results": result.step_results,
+                "total_time": result.total_time,
+                "error_message": result.error_message,
+            }
+            
+            record.status = ExecutionState.PASSED if result.passed else ExecutionState.FAILED
+            
+            # 同步保存报告
+            self._save_report_sync(execution_id, test_id, record.result)
+            
+            # 线程安全地调用进度回调
+            if on_progress:
+                try:
+                    on_progress(record.to_dict())
+                except Exception as cb_err:
+                    logger.warning(f"进度回调异常: {cb_err}")
+            
+            runner.close()
+            
+        except Exception as e:
+            record.status = ExecutionState.ERROR
+            record.error = str(e)
+            record.end_time = datetime.now()
+            record.logs.append(f"执行错误: {str(e)}")
+            runner.close()
+            raise
+        
+        return record.to_dict()
+    
+    def _cleanup_old_records(self):
+        """FIFO 清理旧执行记录，保持最多 MAX_EXECUTION_RECORDS 条"""
+        while len(self._executions) > self.MAX_EXECUTION_RECORDS:
+            oldest_key = next(iter(self._executions))
+            removed = self._executions.pop(oldest_key)
+            self._callbacks.pop(oldest_key, None)
+            logger.debug(f"清理过期执行记录: {oldest_key}")
+    
+    def _safe_notify_callbacks(self, execution_id: str, data: Dict[str, Any]):
+        """线程安全地通知所有回调"""
+        with self._lock:
+            callbacks = list(self._callbacks.get(execution_id, []))
+        for callback in callbacks:
+            try:
+                callback(data)
+            except Exception as e:
+                logger.warning(f"执行回调异常: {e}")
     
     def register_callback(self, execution_id: str, callback: Callable):
         """注册执行进度回调"""

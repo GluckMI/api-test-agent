@@ -1,5 +1,5 @@
 """
-API Test Agent v2.0 - API 接口自动化测试框架
+API Test Agent v3.0 - API 接口自动化测试框架
 
 一个现代化的、功能丰富的 API 自动化测试框架，支持：
 - 多环境配置管理
@@ -10,6 +10,7 @@ API Test Agent v2.0 - API 接口自动化测试框架
 - HTML/Markdown/JSON 报告生成
 - 性能测试（负载测试、RPS 控制、阈值告警）
 - 认证管理（OAuth 2.0 / JWT / API Key / HMAC）
+- 可视化 GUI 编辑器（React 19 + Ant Design 6）
 
 Usage:
     # CLI 方式运行
@@ -19,7 +20,7 @@ Usage:
     from api_test_agent import TestRunner, EnvironmentManager
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0-alpha"
 __author__ = "API Test Agent Team"
 
 # 导出核心类和函数

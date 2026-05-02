@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Progress, Tag, Space, Button, List, Typography, Alert } from 'antd';
 import { ArrowLeftOutlined, StopOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
@@ -7,6 +7,22 @@ import type { WebSocketMessage, ExecutionRecord } from '../types';
 
 const { Text } = Typography;
 
+const MAX_LOG_ENTRIES = 1000;
+
+const LogEntry = React.memo<{ log: string; index: number }>(({ log, index }) => (
+  <Text
+    key={index}
+    style={{
+      color: log.includes('ERROR') ? '#ff4d4f' : log.includes('WARN') ? '#faad14' : '#d4d4d4',
+      display: 'block',
+      fontSize: 12,
+      fontFamily: 'monospace',
+    }}
+  >
+    {log}
+  </Text>
+));
+
 const ExecutionConsole: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -14,13 +30,20 @@ const ExecutionConsole: React.FC = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [status, setStatus] = useState('running');
   const wsRef = useRef<WebSocket | null>(null);
+  const stopRef = useRef<(() => Promise<void>) | null>(null);
 
-  useEffect(() => {
-    connectWebSocket();
-    return () => wsRef.current?.close();
+  const handleStop = useCallback(async () => {
+    try {
+      await executionApi.stop(id!);
+      setStatus('stopped');
+    } catch (e) {
+      // handled
+    }
   }, [id]);
 
-  const connectWebSocket = () => {
+  stopRef.current = handleStop;
+
+  useEffect(() => {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = API_BASE_URL ? new URL(API_BASE_URL).host : window.location.host;
@@ -48,7 +71,10 @@ const ExecutionConsole: React.FC = () => {
           setStatus(msg.result?.passed ? 'passed' : 'failed');
           break;
         case 'log':
-          setLogs(prev => [...prev, `[${msg.level?.toUpperCase()}] ${msg.message}`]);
+          setLogs(prev => {
+            const newLogs = [...prev, `[${msg.level?.toUpperCase()}] ${msg.message}`];
+            return newLogs.length > MAX_LOG_ENTRIES ? newLogs.slice(newLogs.length - MAX_LOG_ENTRIES) : newLogs;
+          });
           break;
         case 'status':
           setStatus(msg.status || 'completed');
@@ -63,16 +89,11 @@ const ExecutionConsole: React.FC = () => {
     ws.onclose = () => {
       console.log('WebSocket closed');
     };
-  };
 
-  const handleStop = async () => {
-    try {
-      await executionApi.stop(id!);
-      setStatus('stopped');
-    } catch (e) {
-      // handled
-    }
-  };
+    return () => {
+      wsRef.current?.close();
+    };
+  }, [id]);
 
   return (
     <div>
@@ -120,9 +141,7 @@ const ExecutionConsole: React.FC = () => {
       <Card title="执行日志">
         <div style={{ height: 400, overflow: 'auto', background: '#1e1e1e', padding: 12, borderRadius: 4 }}>
           {logs.map((log, i) => (
-            <Text key={i} style={{ color: log.includes('ERROR') ? '#ff4d4f' : log.includes('WARN') ? '#faad14' : '#d4d4d4', display: 'block', fontSize: 12, fontFamily: 'monospace' }}>
-              {log}
-            </Text>
+            <LogEntry key={i} log={log} index={i} />
           ))}
           {logs.length === 0 && <div style={{ color: '#666', textAlign: 'center', padding: 40 }}>等待日志输出...</div>}
         </div>

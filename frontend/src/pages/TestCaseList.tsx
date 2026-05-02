@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Table, Button, Tag, Space, Popconfirm, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { testApi } from '../api/tests';
@@ -14,7 +14,7 @@ const TestCaseList: React.FC = () => {
 
   useEffect(() => { loadTests(); }, []);
 
-  const loadTests = async () => {
+  const loadTests = useCallback(async () => {
     setLoading(true);
     try {
       const data = await testApi.list();
@@ -24,9 +24,9 @@ const TestCaseList: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleRun = async (testId: string) => {
+  const handleRun = useCallback(async (testId: string) => {
     try {
       const result = await executionApi.run(testId);
       message.success('测试执行已启动');
@@ -34,9 +34,9 @@ const TestCaseList: React.FC = () => {
     } catch (e) {
       // handled
     }
-  };
+  }, [navigate]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     try {
       await testApi.delete(id);
       message.success('测试用例已删除');
@@ -44,9 +44,13 @@ const TestCaseList: React.FC = () => {
     } catch (e) {
       // handled
     }
-  };
+  }, [loadTests]);
 
-  const columns = [
+  const handleNavigate = useCallback((path: string) => {
+    navigate(path);
+  }, [navigate]);
+
+  const columns = useMemo(() => [
     { title: '用例名称', dataIndex: 'name', key: 'name' },
     { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
     {
@@ -70,23 +74,29 @@ const TestCaseList: React.FC = () => {
       render: (_: any, record: TestCase) => (
         <Space>
           <Button type="link" icon={<PlayCircleOutlined />} size="small" onClick={() => handleRun(record.id)}>运行</Button>
-          <Button type="link" icon={<EditOutlined />} size="small" onClick={() => navigate(`/tests/${record.id}`)}>编辑</Button>
+          <Button type="link" icon={<EditOutlined />} size="small" onClick={() => handleNavigate(`/tests/${record.id}`)}>编辑</Button>
           <Popconfirm title="确定删除此用例？" onConfirm={() => handleDelete(record.id)}>
             <Button type="link" danger icon={<DeleteOutlined />} size="small">删除</Button>
           </Popconfirm>
         </Space>
       ),
     },
-  ];
+  ], [handleRun, handleDelete, handleNavigate]);
 
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/tests/new')}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => handleNavigate('/tests/new')}>
           创建测试用例
         </Button>
       </div>
-      <Table columns={columns} dataSource={tests} rowKey="id" loading={loading} />
+      <Table
+        columns={columns}
+        dataSource={tests}
+        rowKey="id"
+        loading={loading}
+        pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total: number) => `共 ${total} 条` }}
+      />
     </div>
   );
 };
