@@ -25,7 +25,7 @@ def is_port_available(host: str, port: int) -> bool:
     except OSError:
         return False
     except Exception:
-        return True
+        return False
     finally:
         if sock:
             sock.close()
